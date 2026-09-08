@@ -1,0 +1,9 @@
+{
+  "name": "sapienza-school-platform",
+  "private": true,
+  "scripts": {
+    "dev:api": "npm --prefix server run dev",
+    "build:api": "npm --prefix server run build",
+    "test:api": "npm --prefix server test"
+  }
+}
