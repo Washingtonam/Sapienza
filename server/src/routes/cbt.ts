@@ -53,7 +53,7 @@ router.post('/exams/:examId/questions', requirePermission('cbt:manage'), async (
   } catch (error) { next(error); }
 });
 
-router.get('/exams/:examId/questions', requirePermission('cbt:read'), async (request, response, next) => {
+router.get('/exams/:examId/questions', requirePermission('cbt:read'), async (request: AuthenticatedRequest, response, next) => {
   try {
     const exam = await CbtExam.findById(request.params.examId).select('title instructions durationMinutes startsAt endsAt status classId published').lean();
     if (!exam) { response.status(404).json({ error: 'Exam not found' }); return; }
@@ -80,7 +80,7 @@ router.post('/exams/:examId/start', requirePermission('cbt:attempt'), async (req
     const existing = await CbtAttempt.findOne({ examId: exam._id, studentId: student._id });
     if (existing) { response.json({ attempt: { id: existing.id, startedAt: existing.startedAt, status: existing.status } }); return; }
     const attempt = await CbtAttempt.create({ examId: exam._id, studentId: student._id, startedAt: now });
-    await writeAuditLog({ request, actorId: request.user!.id, action: 'cbt_attempt.started', entityType: 'CbtAttempt', entityId: attempt.id, after: { examId: exam.id, studentId: student.id } });
+    await writeAuditLog({ request, actorId: request.user!.id, action: 'cbt_attempt.started', entityType: 'CbtAttempt', entityId: attempt.id, after: { examId: exam._id, studentId: student._id } });
     response.status(201).json({ attempt: { id: attempt.id, startedAt: attempt.startedAt, status: attempt.status } });
   } catch (error) { next(error); }
 });
@@ -105,7 +105,7 @@ router.post('/attempts/:attemptId/submit', requirePermission('cbt:attempt'), asy
     });
     const maxScore = questions.reduce((total, question) => total + question.points, 0);
     const score = answers.reduce((total, answer) => total + answer.pointsAwarded, 0);
-    attempt.answers = answers;
+    attempt.set('answers', answers);
     attempt.score = score;
     attempt.maxScore = maxScore;
     attempt.percentage = maxScore ? Math.round(score / maxScore * 10000) / 100 : 0;

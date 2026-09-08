@@ -75,7 +75,7 @@ router.get('/exports/attendance.csv', requirePermission('reports:read'), async (
 router.get('/exports/invoices.csv', requirePermission('reports:read'), async (_request, response, next) => {
   try {
     const invoices = await Invoice.find().lean();
-    csvResponse(response, 'invoices.csv', ['Invoice', 'Student', 'Amount', 'Paid', 'Balance', 'Status', 'Due date'], invoices.map((invoice) => [invoice.id, invoice.studentId, invoice.amount, invoice.amountPaid, invoice.balance, invoice.status, invoice.dueDate.toISOString()]));
+    csvResponse(response, 'invoices.csv', ['Invoice', 'Student', 'Amount', 'Paid', 'Balance', 'Status', 'Due date'], invoices.map((invoice) => [invoice._id, invoice.studentId, invoice.amount, invoice.amountPaid, invoice.balance, invoice.status, invoice.dueDate.toISOString()]));
   } catch (error) { next(error); }
 });
 
