@@ -23,6 +23,13 @@ export function login(email: string, password: string) {
   return request<{ token: string; user: SessionUser }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
 }
 
+export function register(firstName: string, lastName: string, email: string, password: string) {
+  return request<{ token: string; user: SessionUser }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ firstName, lastName, email, password })
+  });
+}
+
 export function currentUser() {
   return request<{ user: SessionUser }>('/auth/me');
 }
