@@ -1,77 +1,38 @@
 import { useEffect, useState } from 'react';
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { currentUser, login, publicContent, register, type SessionUser } from './api';
 
 type Notice = { title: string; body: string; category: string };
 
-export function App() {
-  const [user, setUser] = useState<SessionUser | null>(null);
+function roleNames(user: SessionUser | null) { return user?.roles?.map((role) => role.name) ?? []; }
+function homeFor(user: SessionUser) {
+  const roles = roleNames(user);
+  return roles.includes('super_admin') || roles.includes('admin') ? '/admin' : roles.includes('teacher') ? '/staff' : '/student';
+}
+
+function PublicLayout({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
+  return <main className="page-shell"><nav><Link className="brand" to="/"><strong>SAPIENZA</strong><span>Catholic School</span></Link><div className="nav-actions">{user ? <><Link to={homeFor(user)}>Open portal</Link><button onClick={onLogout}>Sign out</button></> : <><Link to="/register">Create account</Link><Link to="/login">Sign in</Link></>}</div></nav><Outlet /></main>;
+}
+
+function Landing({ user }: { user: SessionUser | null }) {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [heroImage, setHeroImage] = useState<string>();
-  const [showLogin, setShowLogin] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (localStorage.getItem('sapienza.token')) currentUser().then(({ user: nextUser }) => setUser(nextUser)).catch(() => localStorage.removeItem('sapienza.token'));
-    publicContent().then(([noticeData, mediaData]) => {
-      setNotices(noticeData.notices);
-      setHeroImage(mediaData.media.find((asset) => asset.key === 'homepage.hero')?.url);
-    }).catch(() => undefined);
-  }, []);
-
-  async function handleLogin(event: React.FormEvent) {
-    event.preventDefault();
-    setLoading(true); setError('');
-    try {
-      const result = await login(email, password);
-      localStorage.setItem('sapienza.token', result.token);
-      const session = await currentUser();
-      setUser(session.user); setShowLogin(false);
-    } catch (loginError) { setError(loginError instanceof Error ? loginError.message : 'Unable to sign in'); }
-    finally { setLoading(false); }
-  }
-
-  async function handleRegister(event: React.FormEvent) {
-    event.preventDefault();
-    setLoading(true); setError('');
-    try {
-      const result = await register(firstName, lastName, email, password);
-      localStorage.setItem('sapienza.token', result.token);
-      const session = await currentUser();
-      setUser(session.user); setShowRegister(false);
-    } catch (registrationError) { setError(registrationError instanceof Error ? registrationError.message : 'Unable to create account'); }
-    finally { setLoading(false); }
-  }
-
-  function openRegistration() {
-    setError(''); setShowLogin(false); setShowRegister(true);
-  }
-
-  function openLogin() {
-    setError(''); setShowRegister(false); setShowLogin(true);
-  }
-
-  const roleNames = user?.roles?.map((role) => role.name) ?? [];
-  const canAccessStaff = roleNames.some((role) => ['teacher', 'admin', 'super_admin'].includes(role));
-  const canAccessAdmin = roleNames.some((role) => ['admin', 'super_admin'].includes(role));
-
-  return <main className="page-shell">
-    <nav><strong>SAPIENZA</strong><span>Catholic School</span><div className="nav-actions">{!user && <button onClick={openRegistration}>Create account</button>}<button onClick={() => user ? (localStorage.removeItem('sapienza.token'), setUser(null)) : openLogin()}>{user ? 'Sign out' : 'Sign in'}</button></div></nav>
-    <section className="hero" style={heroImage ? { backgroundImage: `linear-gradient(90deg, rgba(244,241,233,.96) 0%, rgba(244,241,233,.75) 55%, rgba(244,241,233,.2)), url(${heroImage})` } : undefined}>
-      <p className="eyebrow">Forming minds. Shaping character.</p><h1>Learn with purpose.<br /><em>Live with faith.</em></h1>
-      <p className="intro">A connected school community for students, families, teachers, and alumni.</p>
-      <div className="actions"><button className="primary" onClick={() => document.getElementById('notices')?.scrollIntoView({ behavior: 'smooth' })}>Explore Sapienza</button><button className="text-button" onClick={() => document.getElementById('admissions')?.scrollIntoView({ behavior: 'smooth' })}>Admissions <span>↗</span></button></div>
-    </section>
-    <section className="portal-strip portals"><div><small>PORTALS</small><h2>Choose the space that fits your role.</h2></div><div className="portal-links"><button onClick={() => user ? document.getElementById('portal-status')?.scrollIntoView({ behavior: 'smooth' }) : openLogin()}>Student Portal <span>→</span></button><button onClick={() => canAccessStaff ? document.getElementById('portal-status')?.scrollIntoView({ behavior: 'smooth' }) : openLogin()}>Staff Portal <span>→</span></button><button onClick={() => canAccessAdmin ? document.getElementById('portal-status')?.scrollIntoView({ behavior: 'smooth' }) : openLogin()}>Admin Portal <span>→</span></button></div></section>
-    {user && <section id="portal-status" className="welcome"><small>WELCOME BACK</small><h2>{user.firstName}, your school day starts here.</h2><p className="muted">Signed in as {roleNames.join(', ') || 'school community member'}.</p><div className="portal-links"><button>Academic records <span>→</span></button><button>Assignments and CBT <span>→</span></button><button>Fees and notifications <span>→</span></button></div></section>}
-    <section id="notices" className="portal-strip"><div><small>NOTICE BOARD</small><h2>What is happening at Sapienza.</h2></div><div className="notice-list">{notices.length ? notices.slice(0, 3).map((notice) => <article key={notice.title}><small>{notice.category}</small><h3>{notice.title}</h3><p>{notice.body}</p></article>) : <p className="muted">New school announcements will appear here.</p>}</div></section>
-    <section id="admissions" className="admissions"><small>ADMISSIONS</small><h2>Begin your Sapienza journey.</h2><p>Our admissions team helps families understand programs, application steps, and the life of the school.</p><button className="text-button" onClick={() => openRegistration()}>Create a family account <span>↗</span></button></section>
-    {showLogin && <div className="modal-backdrop" onClick={() => setShowLogin(false)}><form className="login-panel" onSubmit={handleLogin} onClick={(event) => event.stopPropagation()}><button type="button" className="close" onClick={() => setShowLogin(false)}>×</button><small>SCHOOL PORTAL</small><h2>Sign in to continue.</h2><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <p className="form-error">{error}</p>}<button className="primary" disabled={loading}>{loading ? 'Signing in...' : 'Sign in'}</button><button type="button" className="text-button" onClick={openRegistration}>Need an account? Create one</button></form></div>}
-    {showRegister && <div className="modal-backdrop" onClick={() => setShowRegister(false)}><form className="login-panel" onSubmit={handleRegister} onClick={(event) => event.stopPropagation()}><button type="button" className="close" onClick={() => setShowRegister(false)}>×</button><small>JOIN SAPIENZA</small><h2>Create your account.</h2><div className="name-fields"><label>First name<input value={firstName} onChange={(event) => setFirstName(event.target.value)} required /></label><label>Last name<input value={lastName} onChange={(event) => setLastName(event.target.value)} required /></label></div><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Password<input type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <p className="form-error">{error}</p>}<button className="primary" disabled={loading}>{loading ? 'Creating account...' : 'Create account'}</button><button type="button" className="text-button" onClick={openLogin}>Already have an account? Sign in</button></form></div>}
-  </main>;
+  useEffect(() => { publicContent().then(([noticeData, mediaData]) => { setNotices(noticeData.notices); setHeroImage(mediaData.media.find((asset) => asset.key === 'homepage.hero')?.url); }).catch(() => undefined); }, []);
+  return <><section className="hero" style={heroImage ? { backgroundImage: `linear-gradient(90deg, rgba(244,241,233,.96), rgba(244,241,233,.2)), url(${heroImage})` } : undefined}><p className="eyebrow">Forming minds. Shaping character.</p><h1>Learn with purpose.<br /><em>Live with faith.</em></h1><p className="intro">A connected school community for students, families, teachers, and alumni.</p><div className="actions"><a className="primary" href="#notices">Explore Sapienza</a><Link className="text-button" to="/admissions">Admissions <span>↗</span></Link></div></section><section className="portal-strip portals"><div><small>PORTALS</small><h2>Choose the space that fits your role.</h2></div><div className="portal-links"><Link to={user ? '/student' : '/login'}>Student Portal <span>→</span></Link><Link to={user && roleNames(user).some((role) => ['teacher', 'admin', 'super_admin'].includes(role)) ? '/staff' : '/login'}>Staff Portal <span>→</span></Link><Link to={user && roleNames(user).some((role) => ['admin', 'super_admin'].includes(role)) ? '/admin' : '/login'}>Admin Portal <span>→</span></Link></div></section><section id="notices" className="portal-strip"><div><small>NOTICE BOARD</small><h2>What is happening at Sapienza.</h2></div><div className="notice-list">{notices.length ? notices.slice(0, 3).map((notice) => <article key={notice.title}><small>{notice.category}</small><h3>{notice.title}</h3><p>{notice.body}</p></article>) : <p className="muted">New school announcements will appear here.</p>}</div></section></>;
 }
+
+function Admissions() { return <section className="admissions"><small>ADMISSIONS</small><h2>Begin your Sapienza journey.</h2><p>Our admissions team helps families understand programs, application steps, and the life of the school.</p><Link className="text-button" to="/register">Create a family account <span>↗</span></Link></section>; }
+
+function AuthPage({ mode, onAuthenticated }: { mode: 'login' | 'register'; onAuthenticated: (user: SessionUser) => void }) {
+  const navigate = useNavigate(); const [firstName, setFirstName] = useState(''); const [lastName, setLastName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
+  async function submit(event: React.FormEvent) { event.preventDefault(); setLoading(true); setError(''); try { const result = mode === 'login' ? await login(email, password) : await register(firstName, lastName, email, password); localStorage.setItem('sapienza.token', result.token); const session = await currentUser(); onAuthenticated(session.user); navigate(homeFor(session.user)); } catch (authError) { setError(authError instanceof Error ? authError.message : 'Unable to continue'); } finally { setLoading(false); } }
+  return <div className="auth-page"><form className="login-panel" onSubmit={submit}><small>{mode === 'login' ? 'SCHOOL PORTAL' : 'JOIN SAPIENZA'}</small><h2>{mode === 'login' ? 'Sign in to continue.' : 'Create your account.'}</h2>{mode === 'register' && <div className="name-fields"><label>First name<input value={firstName} onChange={(event) => setFirstName(event.target.value)} required /></label><label>Last name<input value={lastName} onChange={(event) => setLastName(event.target.value)} required /></label></div>}<label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>Password<input type="password" minLength={mode === 'register' ? 8 : undefined} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <p className="form-error">{error}</p>}<button className="primary" disabled={loading}>{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Create account'}</button><Link className="text-button" to={mode === 'login' ? '/register' : '/login'}>{mode === 'login' ? 'Need an account? Create one' : 'Already have an account? Sign in'}</Link></form></div>;
+}
+
+function ProtectedRoute({ user, roles }: { user: SessionUser | null; roles?: string[] }) { if (!user) return <Navigate to="/login" replace />; if (roles && !roles.some((role) => roleNames(user).includes(role))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} />; }
+function AuthenticatedLayout({ user }: { user: SessionUser }) { const navigate = useNavigate(); const location = useLocation(); const roles = roleNames(user); const admin = roles.includes('admin') || roles.includes('super_admin'); const staff = roles.some((role) => ['teacher', 'admin', 'super_admin'].includes(role)); const links = admin ? [['Dashboard', '/admin'], ['Users & roles', '/admin/users'], ['Academics', '/admin/academics'], ['Finance', '/admin/finance'], ['Content & media', '/admin/content'], ['Reports', '/admin/reports']] : staff ? [['Dashboard', '/staff'], ['Attendance', '/staff/attendance'], ['Assignments', '/staff/assignments'], ['Grades', '/staff/grades'], ['CBT', '/staff/cbt']] : [['Dashboard', '/student'], ['Academic records', '/student/records'], ['Assignments', '/student/assignments'], ['CBT', '/student/cbt'], ['Fees', '/student/fees']]; return <main className="portal-shell"><aside><Link className="brand" to="/"><strong>SAPIENZA</strong><span>Portal</span></Link><small>{admin ? 'ADMINISTRATION' : staff ? 'STAFF PORTAL' : 'STUDENT PORTAL'}</small><div className="side-links">{links.map(([label, path]) => <Link className={location.pathname === path ? 'active' : ''} key={path} to={path}>{label}<span>→</span></Link>)}</div><button className="signout" onClick={() => { localStorage.removeItem('sapienza.token'); navigate('/'); }}>Sign out</button></aside><section className="portal-content"><header><small>{user.firstName} {user.lastName}</small><h1>{links.find(([, path]) => path === location.pathname)?.[0] ?? 'Dashboard'}</h1></header><Outlet /></section></main>; }
+
+function DashboardPage({ kind }: { kind: 'student' | 'staff' | 'admin' }) { const copy = { student: ['Your school day, in one place.', 'Review your records, assignments, tests, and fees.'], staff: ['Keep the school moving forward.', 'Manage attendance, learning, grades, and assessments.'], admin: ['The school at a glance.', 'Manage people, operations, finance, content, and reports.'] }[kind]; return <div className="dashboard-grid"><article className="dashboard-lead"><small>OVERVIEW</small><h2>{copy[0]}</h2><p>{copy[1]}</p></article><article><small>QUICK ACTION</small><h3>Recent activity</h3><p className="muted">Connect your first records to see live activity here.</p></article><article><small>STATUS</small><h3>System ready</h3><p className="muted">Your role-based workspace is active.</p></article></div>; }
+function PlaceholderPage() { return <div className="empty-state"><small>WORKSPACE</small><h2>This section is ready for data.</h2><p className="muted">The page is connected to your role. Its live records will appear here as the module is configured.</p></div>; }
+
+export function App() { const [user, setUser] = useState<SessionUser | null>(null); useEffect(() => { if (localStorage.getItem('sapienza.token')) currentUser().then(({ user: nextUser }) => setUser(nextUser)).catch(() => { localStorage.removeItem('sapienza.token'); setUser(null); }); }, []); return <Routes><Route element={<PublicLayout user={user} onLogout={() => { localStorage.removeItem('sapienza.token'); setUser(null); }} />}><Route path="/" element={<Landing user={user} />} /><Route path="/admissions" element={<Admissions />} /><Route path="/login" element={<AuthPage mode="login" onAuthenticated={setUser} />} /><Route path="/register" element={<AuthPage mode="register" onAuthenticated={setUser} />} /></Route><Route element={<ProtectedRoute user={user} roles={['student']} />}><Route path="/student" element={<DashboardPage kind="student" />} /><Route path="/student/*" element={<PlaceholderPage />} /></Route><Route element={<ProtectedRoute user={user} roles={['teacher', 'admin', 'super_admin']} />}><Route path="/staff" element={<DashboardPage kind="staff" />} /><Route path="/staff/*" element={<PlaceholderPage />} /></Route><Route element={<ProtectedRoute user={user} roles={['admin', 'super_admin']} />}><Route path="/admin" element={<DashboardPage kind="admin" />} /><Route path="/admin/*" element={<PlaceholderPage />} /></Route><Route path="*" element={<Navigate to="/" replace />} /></Routes>; }
