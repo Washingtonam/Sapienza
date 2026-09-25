@@ -8,6 +8,7 @@ export type Permission =
   | 'audit:read'
   | 'academics:read'
   | 'academics:manage'
+  | 'academics:enroll'
   | 'records:read'
   | 'records:manage'
   | 'records:submit'

@@ -23,6 +23,16 @@
 .editable-section legend{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#98704c;font-weight:700;padding:0 6px}
 .remove-section{position:absolute;right:14px;top:8px;background:transparent;color:#8d3e32;text-decoration:underline;text-underline-offset:3px;font-size:12px}
 .editor-section-heading{padding-top:10px;border-top:1px solid #aab8ad}
+.section-image-field{display:grid;gap:8px;font-size:13px;font-weight:650;color:#29463f}
+.section-image-sources{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #aab8ad}
+.section-image-sources button{padding:8px 10px;background:transparent;color:#18322d;border-bottom:2px solid transparent;font-size:12px}
+.section-image-sources button[aria-pressed="true"]{border-bottom-color:#b25b42;font-weight:700}
+.section-image-field label{display:grid;gap:6px;font-weight:400}
+.section-image-field small{font-size:11px;font-weight:400;color:#426057}
+.media-source-switch{display:flex;gap:6px;border-bottom:1px solid #aab8ad}
+.media-source-switch button{padding:10px 12px;background:transparent;color:#18322d;border-bottom:2px solid transparent}
+.media-source-switch button[aria-pressed="true"]{border-bottom-color:#b25b42;font-weight:700}
+.section-image-preview{width:100%;max-width:240px;aspect-ratio:16/9;object-fit:cover;border:1px solid #d2dcd2;background:#dbe8df}
 .editor-section-heading h3,.media-editor h3{margin:6px 0 0;font-size:19px}
 .save-content{justify-self:start;background:#18322d;color:#f7f2e9;padding:12px 18px}
 .save-content:disabled{opacity:.6;cursor:wait}

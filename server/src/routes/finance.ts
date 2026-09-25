@@ -8,6 +8,7 @@ import { Invoice } from '../models/Invoice.js';
 import { Payment } from '../models/Payment.js';
 import { Student } from '../models/Student.js';
 import { StudentGuardian } from '../models/StudentGuardian.js';
+import { SchoolClass } from '../models/Class.js';
 import { writeAuditLog } from '../services/audit.js';
 import type { AuthenticatedRequest } from '../types/auth.js';
 
@@ -31,12 +32,26 @@ async function accessibleStudentIds(userId: string) {
 }
 
 router.get('/fee-structures', authenticate, requirePermission('finance:read'), async (_request, response, next) => {
-  try { response.json({ feeStructures: await FeeStructure.find().sort({ createdAt: -1 }).lean() }); } catch (error) { next(error); }
+  try { response.json({ feeStructures: await FeeStructure.find().populate('schoolYearId', 'name status').populate('classId', 'name level').sort({ createdAt: -1 }).lean() }); } catch (error) { next(error); }
+});
+
+router.get('/classes', authenticate, requirePermission('finance:read'), async (_request, response, next) => {
+  try { response.json({ classes: await SchoolClass.find().populate('schoolYearId', 'name status').sort({ schoolYearId: -1, level: 1, name: 1 }).lean() }); } catch (error) { next(error); }
+});
+
+router.get('/students', authenticate, requirePermission('finance:read'), async (_request, response, next) => {
+  try {
+    const students = await Student.find({ enrollmentStatus: 'active' }).select('admissionNumber userId classId').populate('userId', 'firstName lastName').populate('classId', 'name level').sort({ admissionNumber: 1 }).lean();
+    response.json({ students });
+  } catch (error) { next(error); }
 });
 
 router.post('/fee-structures', authenticate, requirePermission('finance:manage'), async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = feeInput.parse(request.body);
+    const schoolClass = await SchoolClass.findById(input.classId).select('schoolYearId');
+    if (!schoolClass) { response.status(404).json({ error: 'Class not found' }); return; }
+    if (String(schoolClass.schoolYearId) !== input.schoolYearId) { response.status(400).json({ error: 'The selected class does not belong to this school year' }); return; }
     const totalAmount = input.items.reduce((total, item) => total + item.amount, 0);
     const feeStructure = await FeeStructure.create({ ...input, totalAmount });
     await writeAuditLog({ request, actorId: request.user!.id, action: 'fee_structure.created', entityType: 'FeeStructure', entityId: feeStructure.id, after: feeStructure.toObject() });
@@ -45,7 +60,22 @@ router.post('/fee-structures', authenticate, requirePermission('finance:manage')
 });
 
 router.get('/invoices', authenticate, requirePermission('finance:read'), async (_request, response, next) => {
-  try { response.json({ invoices: await Invoice.find().populate('studentId').populate('feeStructureId').sort({ dueDate: 1 }).lean() }); } catch (error) { next(error); }
+  try {
+    const invoices = await Invoice.find().populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: [{ path: 'userId', select: 'firstName lastName' }, { path: 'classId', select: 'name level' }] }).populate('feeStructureId', 'name totalAmount').sort({ dueDate: 1 }).lean();
+    response.json({ invoices });
+  } catch (error) { next(error); }
+});
+
+router.get('/payments', authenticate, requirePermission('finance:read'), async (_request, response, next) => {
+  try {
+    const payments = await Payment.find()
+      .populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: [{ path: 'userId', select: 'firstName lastName' }, { path: 'classId', select: 'name level' }] })
+      .populate({ path: 'invoiceId', select: 'amount amountPaid balance status dueDate feeStructureId', populate: { path: 'feeStructureId', select: 'name' } })
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+    response.json({ payments });
+  } catch (error) { next(error); }
 });
 
 router.get('/my-invoices', authenticate, async (request: AuthenticatedRequest, response, next) => {
@@ -55,8 +85,13 @@ router.get('/my-invoices', authenticate, async (request: AuthenticatedRequest, r
 router.post('/invoices', authenticate, requirePermission('finance:manage'), async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = invoiceInput.parse(request.body);
-    const feeStructure = await FeeStructure.findById(input.feeStructureId).select('totalAmount dueDate');
-    if (!feeStructure) { response.status(404).json({ error: 'Fee structure not found' }); return; }
+    const [feeStructure, student] = await Promise.all([
+      FeeStructure.findById(input.feeStructureId).select('totalAmount dueDate classId'),
+      Student.findById(input.studentId).select('classId enrollmentStatus')
+    ]);
+    if (!feeStructure || !student) { response.status(404).json({ error: 'Fee structure or student not found' }); return; }
+    if (student.enrollmentStatus !== 'active' || String(student.classId) !== String(feeStructure.classId)) { response.status(400).json({ error: 'The selected student is not active in the fee structure class' }); return; }
+    if (await Invoice.exists({ studentId: student._id, feeStructureId: feeStructure._id })) { response.status(409).json({ error: 'An invoice already exists for this student and fee structure' }); return; }
     const invoice = await Invoice.create({ ...input, amount: feeStructure.totalAmount, amountPaid: 0, balance: feeStructure.totalAmount, dueDate: feeStructure.dueDate });
     await writeAuditLog({ request, actorId: request.user!.id, action: 'invoice.created', entityType: 'Invoice', entityId: invoice.id, after: invoice.toObject() });
     response.status(201).json({ invoice });

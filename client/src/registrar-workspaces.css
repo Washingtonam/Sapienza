@@ -1,0 +1,22 @@
+.registrar-workspace { width: 100%; }
+.registrar-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin-bottom: 1.2rem; }
+.registrar-heading h2 { margin: .25rem 0 0; }
+.registrar-heading label, .registrar-publish-form label { display: grid; gap: .4rem; color: var(--muted, #686b64); font-size: .86rem; }
+.registrar-heading input, .registrar-publish-form input, .registrar-publish-form select, .registrar-publish-form textarea { box-sizing: border-box; width: 100%; min-height: 40px; border: 1px solid var(--line, #c8c9c1); background: var(--surface, #fff); color: inherit; padding: .5rem .6rem; font: inherit; }
+.registrar-heading input { min-width: min(340px, 52vw); }
+.registrar-publish-form { margin: 0 0 1.7rem; padding: 1rem 0 1.25rem; border-top: 2px solid #286148; border-bottom: 1px solid var(--line, #dedfd8); }
+.registrar-publish-form header { margin-bottom: 1rem; }
+.registrar-publish-form h3 { margin: .25rem 0 0; }
+.registrar-publish-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+.registrar-publish-form label:nth-last-child(-n+2) { grid-column: span 1; }
+.registrar-publish-form textarea { resize: vertical; }
+.registrar-publish-form>button { min-height: 40px; padding: .55rem .85rem; }
+.registrar-table-wrap { width: 100%; overflow-x: auto; }
+.registrar-table { width: 100%; min-width: 680px; border-collapse: collapse; text-align: left; }
+.registrar-table th, .registrar-table td { padding: .8rem .65rem; border-bottom: 1px solid var(--line, #dedfd8); vertical-align: top; }
+.registrar-table th { color: var(--muted, #686b64); font-size: .72rem; font-weight: 600; text-transform: uppercase; }
+.registrar-table td strong, .registrar-table td small { display: block; }
+.registrar-table td small { margin-top: .25rem; color: var(--muted, #686b64); }
+.registrar-table .capitalize { text-transform: capitalize; }
+.registrar-notice { color: #286148; }
+@media (max-width: 720px) { .registrar-heading { align-items: stretch; flex-direction: column; } .registrar-heading input { min-width: 0; } .registrar-publish-grid { grid-template-columns: 1fr; } }

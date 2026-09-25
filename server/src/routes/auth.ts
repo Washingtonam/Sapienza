@@ -10,6 +10,7 @@ import type { AuthenticatedRequest } from '../types/auth.js';
 
 const router = Router();
 const credentialsSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
+const loginSchema = z.object({ identifier: z.string().trim().min(1), password: z.string().min(8) });
 const registrationSchema = credentialsSchema.extend({ firstName: z.string().min(1), lastName: z.string().min(1) });
 
 async function getOrCreateRole(name: string) {
@@ -19,12 +20,16 @@ async function getOrCreateRole(name: string) {
 router.post('/register', async (request, response, next) => {
   try {
     const input = registrationSchema.parse(request.body);
+    if (await User.countDocuments() > 0) {
+      response.status(403).json({ error: 'Accounts are provisioned by school administration' });
+      return;
+    }
     const existing = await User.findOne({ email: input.email });
     if (existing) {
       response.status(409).json({ error: 'An account with that email already exists' });
       return;
     }
-    const roleName = (await User.countDocuments()) === 0 ? 'super_admin' : 'student';
+    const roleName = 'super_admin';
     const role = await getOrCreateRole(roleName);
     const user = await User.create({ ...input, email: input.email.toLowerCase(), passwordHash: await bcrypt.hash(input.password, 12), roleIds: [role._id] });
     const token = createAccessToken({ id: String(user._id), email: user.email, roleIds: [role._id] });
@@ -35,8 +40,9 @@ router.post('/register', async (request, response, next) => {
 
 router.post('/login', async (request, response, next) => {
   try {
-    const input = credentialsSchema.parse(request.body);
-    const user = await User.findOne({ email: input.email.toLowerCase() }).select('+passwordHash');
+    const input = loginSchema.parse(request.body);
+    const identifier = input.identifier.trim();
+    const user = await User.findOne({ $or: [{ email: identifier.toLowerCase() }, { loginCode: identifier.toUpperCase() }] }).select('+passwordHash');
     if (!user || user.status !== 'active' || !(await bcrypt.compare(input.password, user.passwordHash))) {
       response.status(401).json({ error: 'Invalid credentials' });
       return;

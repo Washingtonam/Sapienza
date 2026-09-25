@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { createSchoolClass, createSchoolTerm, createSchoolYear, schoolClasses, schoolTerms, schoolYears, type SchoolClass, type SchoolTerm, type SchoolYear } from './api';
+import { assignClassTeacher, createSchoolClass, createSchoolTerm, createSchoolYear, schoolClasses, schoolTeachers, schoolTerms, schoolYears, type SchoolClass, type SchoolTerm, type SchoolYear, type TeacherStaff } from './api';
+import './class-assignment.css';
 
 export function AcademicSetupPage() {
   const [years, setYears] = useState<SchoolYear[]>([]);
   const [terms, setTerms] = useState<SchoolTerm[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [teachers, setTeachers] = useState<TeacherStaff[]>([]);
   const [selectedYear, setSelectedYear] = useState('');
   const [yearName, setYearName] = useState('');
   const [yearStart, setYearStart] = useState('');
@@ -14,17 +16,19 @@ export function AcademicSetupPage() {
   const [termEnd, setTermEnd] = useState('');
   const [className, setClassName] = useState('');
   const [classLevel, setClassLevel] = useState('');
+  const [classTeacherId, setClassTeacherId] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
-    Promise.all([schoolYears(), schoolTerms(), schoolClasses()]).then(([yearData, termData, classData]) => {
+    Promise.all([schoolYears(), schoolTerms(), schoolClasses(), schoolTeachers()]).then(([yearData, termData, classData, teacherData]) => {
       if (!active) return;
       setYears(yearData.schoolYears);
       setTerms(termData.terms);
       setClasses(classData.classes);
+      setTeachers(teacherData.teachers);
       setSelectedYear((current) => current || yearData.schoolYears[0]?._id || '');
     }).catch((loadError) => { if (active) setError(loadError instanceof Error ? loadError.message : 'Unable to load academic setup'); });
     return () => { active = false; };
@@ -39,6 +43,14 @@ export function AcademicSetupPage() {
     setError('');
     try { await action(); setReloadKey((key) => key + 1); }
     catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'Unable to save academic setup'); }
+    finally { setBusy(false); }
+  }
+
+  async function changeClassTeacher(schoolClass: SchoolClass, teacherId: string) {
+    setBusy(true);
+    setError('');
+    try { await assignClassTeacher(schoolClass._id, teacherId || null); setReloadKey((key) => key + 1); }
+    catch (assignmentError) { setError(assignmentError instanceof Error ? assignmentError.message : 'Unable to assign class teacher'); }
     finally { setBusy(false); }
   }
 
@@ -84,15 +96,19 @@ export function AcademicSetupPage() {
         <header><small>03 / CLASS LEVELS</small><h2>Add a class</h2></header>
         <form className="academic-class-form" onSubmit={(event) => submit(event, async () => {
           if (!selectedYear) throw new Error('Create or select a school year first');
-          await createSchoolClass({ name: className, level: classLevel, schoolYearId: selectedYear });
-          setClassName(''); setClassLevel('');
+          await createSchoolClass({ name: className, level: classLevel, schoolYearId: selectedYear, ...(classTeacherId ? { classTeacherId } : {}) });
+          setClassName(''); setClassLevel(''); setClassTeacherId('');
         })}>
           <label>School year<select value={selectedYear} onChange={(event) => setSelectedYear(event.target.value)} required><option value="">Select a school year</option>{years.map((year) => <option key={year._id} value={year._id}>{year.name}</option>)}</select></label>
           <label>Class name<input placeholder="JSS 1 Blue" value={className} onChange={(event) => setClassName(event.target.value)} required /></label>
           <label>Level<input placeholder="Junior Secondary" value={classLevel} onChange={(event) => setClassLevel(event.target.value)} required /></label>
+          <label>Class teacher<select value={classTeacherId} onChange={(event) => setClassTeacherId(event.target.value)}><option value="">Assign later</option>{teachers.map((teacher) => <option key={teacher._id} value={teacher._id}>{teacher.userId.firstName} {teacher.userId.lastName}</option>)}</select></label>
           <button className="primary" disabled={busy || !selectedYear}>{busy ? 'Saving...' : 'Add class'}</button>
         </form>
-        <ul className="academic-record-list academic-class-list">{selectedYearClasses.map((schoolClass) => <li key={schoolClass._id}><span><strong>{schoolClass.name}</strong><small>{schoolClass.level}</small></span><small>{yearLabel(schoolClass.schoolYearId)}</small></li>)}</ul>
+        <ul className="academic-record-list academic-class-list">{selectedYearClasses.map((schoolClass) => {
+          const currentTeacherId = typeof schoolClass.classTeacherId === 'string' ? schoolClass.classTeacherId : schoolClass.classTeacherId?._id ?? '';
+          return <li key={schoolClass._id}><span><strong>{schoolClass.name}</strong><small>{schoolClass.level} · {yearLabel(schoolClass.schoolYearId)}</small></span><label className="class-teacher-picker"><span>Class teacher</span><select value={currentTeacherId} onChange={(event) => void changeClassTeacher(schoolClass, event.target.value)} disabled={busy}><option value="">Unassigned</option>{teachers.map((teacher) => <option key={teacher._id} value={teacher._id}>{teacher.userId.firstName} {teacher.userId.lastName}</option>)}</select></label></li>;
+        })}</ul>
       </section>
     </div>
   </section>;

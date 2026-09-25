@@ -1,0 +1,37 @@
+.bursar-workspace { width: 100%; }
+.bursar-heading { display: flex; justify-content: space-between; align-items: end; gap: 1rem; margin-bottom: 1.25rem; }
+.bursar-heading h2 { margin: .25rem 0 0; }
+.bursar-heading button, .bursar-items-heading button, .bursar-item-row>button { min-height: 38px; border: 1px solid var(--line, #c8c9c1); background: var(--surface, #fff); color: inherit; padding: .45rem .7rem; cursor: pointer; }
+.bursar-form { margin: 0 0 1.75rem; padding: 1rem 0 1.25rem; border-top: 2px solid #286148; border-bottom: 1px solid var(--line, #dedfd8); }
+.bursar-form>header { margin-bottom: 1rem; }
+.bursar-form h3 { margin: .25rem 0 0; }
+.bursar-form-grid { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: .85rem; }
+.bursar-form label { display: grid; gap: .4rem; color: var(--muted, #686b64); font-size: .86rem; }
+.bursar-form input, .bursar-form select { box-sizing: border-box; width: 100%; min-height: 40px; border: 1px solid var(--line, #c8c9c1); background: var(--surface, #fff); color: inherit; padding: .5rem .6rem; font: inherit; }
+.bursar-items-heading { display: flex; justify-content: space-between; align-items: center; margin-top: 1.2rem; }
+.bursar-items { display: grid; gap: .65rem; margin-top: .7rem; }
+.bursar-item-row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(120px, .35fr) auto; gap: .75rem; align-items: end; }
+.bursar-form-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.1rem; }
+.bursar-form-footer button, .bursar-invoice-form>button { min-height: 40px; padding: .55rem .85rem; }
+.bursar-invoice-form { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: .8rem; align-items: end; }
+.bursar-invoice-form>header { grid-column: 1 / -1; margin: 0; }
+.bursar-table-wrap { width: 100%; overflow-x: auto; }
+.bursar-table { width: 100%; min-width: 720px; border-collapse: collapse; text-align: left; }
+.payment-table { min-width: 900px; }
+.bursar-table th, .bursar-table td { padding: .8rem .65rem; border-bottom: 1px solid var(--line, #dedfd8); vertical-align: top; }
+.bursar-table th { color: var(--muted, #686b64); font-size: .72rem; font-weight: 600; text-transform: uppercase; }
+.bursar-table td strong, .bursar-table td small { display: block; }
+.bursar-table td small { margin-top: .25rem; color: var(--muted, #686b64); }
+.bursar-notice { color: #286148; }
+.bursar-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; padding: 1rem 0 1.4rem; }
+.bursar-summary>div { display: grid; gap: .35rem; padding-right: 1rem; border-right: 1px solid var(--line, #dedfd8); }
+.bursar-summary>div:last-child { border: 0; }
+.bursar-summary small { color: var(--muted, #686b64); font-size: .72rem; }
+.bursar-summary strong { font-size: 1.3rem; }
+.invoice-status { text-transform: capitalize; }
+.status-paid { color: #286148; }
+.status-overdue { color: #a23e35; }
+.status-successful { color: #286148; }
+.status-failed, .status-refunded { color: #a23e35; }
+@media (max-width: 850px) { .bursar-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .bursar-invoice-form { grid-template-columns: 1fr; } .bursar-summary { gap: .65rem; } .bursar-item-row { grid-template-columns: 1fr 1fr; } .bursar-item-row>button { grid-column: 2; justify-self: end; } }

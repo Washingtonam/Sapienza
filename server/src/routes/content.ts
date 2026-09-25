@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { env } from '../config/env.js';
 import { authenticate, requirePermission } from '../middleware/auth.js';
 import { AlumniPost } from '../models/AlumniPost.js';
 import { AlumniProfile } from '../models/AlumniProfile.js';
@@ -41,6 +43,18 @@ router.get('/manage/pages', authenticate, requirePermission('content:manage'), a
 
 router.get('/manage/media', authenticate, requirePermission('media:manage'), async (_request, response, next) => {
   try { response.json({ media: await MediaAsset.find().sort({ key: 1, version: -1 }).lean() }); } catch (error) { next(error); }
+});
+
+router.post('/media/upload-signature', authenticate, requirePermission('media:manage'), (_request, response) => {
+  const { CLOUDINARY_CLOUD_NAME: cloudName, CLOUDINARY_API_KEY: apiKey, CLOUDINARY_API_SECRET: apiSecret } = env;
+  if (!cloudName || !apiKey || !apiSecret) {
+    response.status(503).json({ error: 'Image uploads are not configured. Add the Cloudinary credentials to the server environment.' });
+    return;
+  }
+  const timestamp = Math.floor(Date.now() / 1000);
+  const folder = 'sapienza-school';
+  const signature = createHash('sha1').update(`folder=${folder}&timestamp=${timestamp}${apiSecret}`).digest('hex');
+  response.json({ cloudName, apiKey, timestamp, folder, signature });
 });
 
 router.get('/media', async (_request, response, next) => {

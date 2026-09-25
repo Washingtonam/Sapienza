@@ -7,6 +7,7 @@ import { AssignmentSubmission } from '../models/AssignmentSubmission.js';
 import { Assessment } from '../models/Assessment.js';
 import { Grade } from '../models/Grade.js';
 import { ReportCard } from '../models/ReportCard.js';
+import { Role } from '../models/Role.js';
 import { Student } from '../models/Student.js';
 import { StudentGuardian } from '../models/StudentGuardian.js';
 import { Term } from '../models/Term.js';
@@ -24,12 +25,24 @@ const assessmentInput = z.object({ title: z.string().min(1), type: z.enum(['test
 const gradeInput = z.object({ assessmentId: z.string(), studentId: z.string(), score: z.number().min(0), grade: z.string().optional(), remarks: z.string().optional() });
 const reportInput = z.object({ schoolYearId: z.string(), term: z.string().min(1), teacherComment: z.string().optional(), principalComment: z.string().optional() });
 
+async function isStudentAccount(request: AuthenticatedRequest) {
+  return Boolean(await Role.exists({ _id: { $in: request.user!.roleIds }, name: 'student' }));
+}
+
+async function ownStudent(request: AuthenticatedRequest) {
+  return Student.findOne({ userId: request.user!.id }).select('_id classId').lean();
+}
+
 router.get('/attendance', requirePermission('records:read'), async (request, response, next) => {
   try {
     const filter: Record<string, unknown> = {};
     if (request.query.studentId) filter.studentId = request.query.studentId;
     if (request.query.classId) filter.classId = request.query.classId;
     if (request.query.date) filter.date = { $gte: new Date(String(request.query.date)), $lt: new Date(new Date(String(request.query.date)).getTime() + 86400000) };
+    if (await isStudentAccount(request)) {
+      const student = await ownStudent(request);
+      filter.studentId = student?._id ?? { $in: [] };
+    }
     response.json({ attendance: await AttendanceRecord.find(filter).populate('studentId').sort({ date: -1 }).lean() });
   } catch (error) { next(error); }
 });
@@ -46,7 +59,15 @@ router.post('/attendance', requirePermission('records:manage'), async (request: 
 });
 
 router.get('/assignments', requirePermission('records:read'), async (request, response, next) => {
-  try { response.json({ assignments: await Assignment.find(request.query.classId ? { classId: request.query.classId } : {}).populate('subjectId', 'name code').sort({ dueAt: 1 }).lean() }); } catch (error) { next(error); }
+  try {
+    const filter: Record<string, unknown> = request.query.classId ? { classId: request.query.classId } : {};
+    if (await isStudentAccount(request)) {
+      const student = await ownStudent(request);
+      filter.classId = student?.classId ?? { $in: [] };
+      filter.status = 'published';
+    }
+    response.json({ assignments: await Assignment.find(filter).populate('subjectId', 'name code').sort({ dueAt: 1 }).lean() });
+  } catch (error) { next(error); }
 });
 
 router.post('/assignments', requirePermission('records:manage'), async (request: AuthenticatedRequest, response, next) => {
@@ -61,10 +82,12 @@ router.post('/assignments', requirePermission('records:manage'), async (request:
 router.post('/assignment-submissions', requirePermission('records:submit'), async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = submissionInput.parse(request.body);
-    const currentStudent = await Student.findOne({ userId: request.user!.id }).select('_id');
-    const studentId = currentStudent ? String(currentStudent._id) : input.studentId;
-    const assignment = await Assignment.findById(input.assignmentId).select('dueAt');
+    const currentStudent = await ownStudent(request);
+    if (!currentStudent) { response.status(403).json({ error: 'Student profile not found for this account' }); return; }
+    const studentId = String(currentStudent._id);
+    const assignment = await Assignment.findById(input.assignmentId).select('dueAt classId status');
     if (!assignment) { response.status(404).json({ error: 'Assignment not found' }); return; }
+    if (String(assignment.classId) !== String(currentStudent.classId) || assignment.status !== 'published') { response.status(403).json({ error: 'This assignment is not available to your class' }); return; }
     const status = input.status === 'submitted' && new Date() > assignment.dueAt ? 'late' : input.status;
     const before = await AssignmentSubmission.findOne({ assignmentId: input.assignmentId, studentId }).lean();
     const submission = await AssignmentSubmission.findOneAndUpdate({ assignmentId: input.assignmentId, studentId }, { ...input, studentId, submittedAt: input.status === 'submitted' ? new Date() : undefined, status }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
@@ -74,7 +97,15 @@ router.post('/assignment-submissions', requirePermission('records:submit'), asyn
 });
 
 router.get('/assessments', requirePermission('records:read'), async (request, response, next) => {
-  try { response.json({ assessments: await Assessment.find(request.query.classId ? { classId: request.query.classId } : {}).populate('subjectId', 'name code').sort({ createdAt: -1 }).lean() }); } catch (error) { next(error); }
+  try {
+    const filter: Record<string, unknown> = request.query.classId ? { classId: request.query.classId } : {};
+    if (await isStudentAccount(request)) {
+      const student = await ownStudent(request);
+      filter.classId = student?.classId ?? { $in: [] };
+      filter.published = true;
+    }
+    response.json({ assessments: await Assessment.find(filter).populate('subjectId', 'name code').sort({ createdAt: -1 }).lean() });
+  } catch (error) { next(error); }
 });
 
 router.post('/assessments', requirePermission('records:manage'), async (request: AuthenticatedRequest, response, next) => {
@@ -89,7 +120,16 @@ router.post('/assessments', requirePermission('records:manage'), async (request:
 });
 
 router.get('/grades', requirePermission('records:read'), async (request, response, next) => {
-  try { response.json({ grades: await Grade.find(request.query.studentId ? { studentId: request.query.studentId } : {}).populate('assessmentId').sort({ createdAt: -1 }).lean() }); } catch (error) { next(error); }
+  try {
+    const filter: Record<string, unknown> = request.query.studentId ? { studentId: request.query.studentId } : {};
+    if (await isStudentAccount(request)) {
+      const student = await ownStudent(request);
+      filter.studentId = student?._id ?? { $in: [] };
+      const publishedAssessments = await Assessment.find({ classId: student?.classId ?? { $in: [] }, published: true }).select('_id').lean();
+      filter.assessmentId = { $in: publishedAssessments.map((assessment) => assessment._id) };
+    }
+    response.json({ grades: await Grade.find(filter).populate('assessmentId').sort({ createdAt: -1 }).lean() });
+  } catch (error) { next(error); }
 });
 
 router.post('/grades', requirePermission('records:manage'), async (request: AuthenticatedRequest, response, next) => {
@@ -121,7 +161,10 @@ router.get('/my-report-cards', async (request: AuthenticatedRequest, response, n
 });
 
 router.get('/report-cards', requirePermission('records:manage'), async (request, response, next) => {
-  try { response.json({ reportCards: await ReportCard.find(request.query.studentId ? { studentId: request.query.studentId } : {}).populate('studentId').populate('schoolYearId', 'name').sort({ createdAt: -1 }).lean() }); } catch (error) { next(error); }
+  try {
+    const reportCards = await ReportCard.find(request.query.studentId ? { studentId: request.query.studentId } : {}).populate({ path: 'studentId', select: 'admissionNumber userId classId', populate: [{ path: 'userId', select: 'firstName lastName' }, { path: 'classId', select: 'name level' }] }).populate('schoolYearId', 'name').sort({ createdAt: -1 }).lean();
+    response.json({ reportCards });
+  } catch (error) { next(error); }
 });
 
 router.post('/report-cards/:studentId/publish', requirePermission('records:manage'), async (request: AuthenticatedRequest, response, next) => {

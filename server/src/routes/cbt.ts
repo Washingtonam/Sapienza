@@ -4,6 +4,7 @@ import { authenticate, requirePermission } from '../middleware/auth.js';
 import { CbtAttempt } from '../models/CbtAttempt.js';
 import { CbtExam } from '../models/CbtExam.js';
 import { CbtQuestion } from '../models/CbtQuestion.js';
+import { Role } from '../models/Role.js';
 import { Student } from '../models/Student.js';
 import { writeAuditLog } from '../services/audit.js';
 import type { AuthenticatedRequest } from '../types/auth.js';
@@ -23,9 +24,17 @@ async function currentStudent(userId: string) {
   return Student.findOne({ userId }).select('_id classId').lean();
 }
 
-router.get('/exams', requirePermission('cbt:read'), async (request, response, next) => {
+router.get('/exams', requirePermission('cbt:read'), async (request: AuthenticatedRequest, response, next) => {
   try {
-    const exams = await CbtExam.find(request.query.classId ? { classId: request.query.classId } : {}).populate('subjectId', 'name code').sort({ startsAt: -1 }).lean();
+    const filter: Record<string, unknown> = request.query.classId ? { classId: request.query.classId } : {};
+    const studentAccount = await Role.exists({ _id: { $in: request.user!.roleIds }, name: 'student' });
+    if (studentAccount) {
+      const student = await currentStudent(request.user!.id);
+      filter.classId = student?.classId ?? { $in: [] };
+      filter.published = true;
+      filter.status = { $in: ['scheduled', 'open'] };
+    }
+    const exams = await CbtExam.find(filter).populate('subjectId', 'name code').sort({ startsAt: -1 }).lean();
     response.json({ exams });
   } catch (error) { next(error); }
 });
