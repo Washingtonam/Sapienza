@@ -1,0 +1,42 @@
+.content-manager{display:grid;gap:22px}
+.content-manager-heading{display:flex;justify-content:space-between;align-items:end;gap:22px;border-bottom:1px solid #aab8ad;padding-bottom:18px}
+.content-manager-heading h2{font-size:28px;margin:8px 0}
+.content-manager-heading p,.media-editor p{color:#426057;line-height:1.5;margin:8px 0 0}
+.content-manager-tabs{display:flex;gap:4px;border-bottom:1px solid #aab8ad}
+.content-manager-tabs button,.managed-list-title button,.editor-section-heading button{background:transparent;color:#18322d;padding:10px 12px;border-bottom:2px solid transparent}
+.content-manager-tabs button[aria-selected="true"]{border-bottom-color:#b25b42;font-weight:700}
+.content-manager-layout{display:grid;grid-template-columns:minmax(210px,.7fr) minmax(0,2fr);gap:26px;align-items:start}
+.managed-list{display:grid;align-content:start;gap:8px}
+.managed-list-title,.editor-section-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.managed-list-title{border-bottom:1px solid #aab8ad;padding-bottom:8px}
+.managed-list-item,.template-action{width:100%;text-align:left;padding:12px;background:#fffdf8;border:1px solid #d2dcd2;color:#18322d;display:grid;gap:5px}
+.managed-list-item span{font-size:12px;color:#426057;overflow-wrap:anywhere}
+.managed-list-item.selected{border-left:3px solid #b25b42;background:#eef3ed}
+.template-action{background:#dbe8df;font-weight:650}
+.content-editor{display:grid;gap:18px}
+.editor-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.editor-fields label,.media-editor>label{display:grid;gap:6px;font-size:13px;font-weight:650;color:#29463f}
+.content-manager input,.content-manager select,.content-manager textarea{width:100%;border:1px solid #aab8ad;background:#fffdf8;padding:10px 11px;color:#18322d;font:inherit;font-weight:400;border-radius:0}
+.content-manager textarea{resize:vertical;line-height:1.5}
+.wide-field{grid-column:1/-1}
+.editable-section{position:relative;display:grid;gap:12px;margin:0;padding:18px;border:1px solid #d2dcd2;background:#fffdf8}
+.editable-section legend{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#98704c;font-weight:700;padding:0 6px}
+.remove-section{position:absolute;right:14px;top:8px;background:transparent;color:#8d3e32;text-decoration:underline;text-underline-offset:3px;font-size:12px}
+.editor-section-heading{padding-top:10px;border-top:1px solid #aab8ad}
+.editor-section-heading h3,.media-editor h3{margin:6px 0 0;font-size:19px}
+.save-content{justify-self:start;background:#18322d;color:#f7f2e9;padding:12px 18px}
+.save-content:disabled{opacity:.6;cursor:wait}
+.content-manager-message{margin:0;padding:11px 14px;border-left:3px solid #527a61;background:#eef3ed}
+.content-manager-message.error{border-left-color:#a33f35;background:#f8e9e5;color:#8d3e32}
+.media-layout{grid-template-columns:minmax(0,1.2fr) minmax(240px,1fr)}
+.media-editor{max-width:680px}
+.managed-media-list{display:grid;gap:10px}
+.managed-media-list>small{border-bottom:1px solid #aab8ad;padding-bottom:10px}
+.managed-media-item{display:grid;grid-template-columns:74px minmax(0,1fr);gap:12px;text-align:left;align-items:center;padding:8px;background:#fffdf8;border:1px solid #d2dcd2;color:#18322d}
+.managed-media-item img{width:74px;height:58px;object-fit:cover;background:#dbe8df}
+.managed-media-item>span{display:grid;gap:5px;min-width:0}
+.managed-media-item strong,.managed-media-item small{overflow-wrap:anywhere}
+.managed-media-item small{font-size:11px;letter-spacing:0;color:#426057;text-transform:none}
+.content-manager .muted{color:#426057;line-height:1.5}
+@media(max-width:800px){.content-manager-layout,.media-layout{grid-template-columns:1fr}.managed-list{grid-template-columns:repeat(2,minmax(0,1fr))}.managed-list-title,.managed-list>.muted{grid-column:1/-1}}
+@media(max-width:520px){.content-manager-heading{align-items:start;flex-direction:column}.managed-list{grid-template-columns:1fr}.editor-fields{grid-template-columns:1fr}.wide-field{grid-column:auto}.editable-section{padding:16px 12px}.remove-section{right:8px}.media-editor{width:100%}}

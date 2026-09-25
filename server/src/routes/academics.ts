@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticate, requirePermission } from '../middleware/auth.js';
 import { SchoolYear } from '../models/SchoolYear.js';
+import { Term } from '../models/Term.js';
 import { Subject } from '../models/Subject.js';
 import { SchoolClass } from '../models/Class.js';
 import { Student } from '../models/Student.js';
@@ -15,6 +16,7 @@ const router = Router();
 router.use(authenticate);
 
 const schoolYearInput = z.object({ name: z.string().min(1), startsAt: z.coerce.date(), endsAt: z.coerce.date(), status: z.enum(['planned', 'active', 'closed']).optional() });
+const termInput = z.object({ name: z.string().min(1), schoolYearId: z.string(), order: z.number().int().min(1).max(3), startsAt: z.coerce.date().optional(), endsAt: z.coerce.date().optional() });
 const subjectInput = z.object({ name: z.string().min(1), code: z.string().min(1), description: z.string().optional() });
 const classInput = z.object({ name: z.string().min(1), level: z.string().min(1), schoolYearId: z.string(), classTeacherId: z.string().optional() });
 const studentInput = z.object({ userId: z.string(), admissionNumber: z.string().min(1), dateOfBirth: z.coerce.date().optional(), gender: z.enum(['female', 'male', 'other', 'undisclosed']).optional(), address: z.string().optional(), classId: z.string().optional(), admissionDate: z.coerce.date() });
@@ -32,6 +34,26 @@ router.post('/school-years', requirePermission('academics:manage'), async (reque
     const schoolYear = await SchoolYear.create(input);
     await writeAuditLog({ request, actorId: request.user!.id, action: 'school_year.created', entityType: 'SchoolYear', entityId: schoolYear.id, after: input });
     response.status(201).json({ schoolYear });
+  } catch (error) { next(error); }
+});
+
+router.get('/terms', requirePermission('academics:read'), async (request, response, next) => {
+  try {
+    const filter = request.query.schoolYearId ? { schoolYearId: request.query.schoolYearId } : {};
+    response.json({ terms: await Term.find(filter).sort({ schoolYearId: -1, order: 1 }).lean() });
+  } catch (error) { next(error); }
+});
+
+router.post('/terms', requirePermission('academics:manage'), async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = termInput.parse(request.body);
+    if (input.startsAt && input.endsAt && input.endsAt <= input.startsAt) { response.status(400).json({ error: 'The term must end after it starts' }); return; }
+    const schoolYear = await SchoolYear.findById(input.schoolYearId).select('startsAt endsAt');
+    if (!schoolYear) { response.status(404).json({ error: 'School year not found' }); return; }
+    if ((input.startsAt && (input.startsAt < schoolYear.startsAt || input.startsAt > schoolYear.endsAt)) || (input.endsAt && (input.endsAt < schoolYear.startsAt || input.endsAt > schoolYear.endsAt))) { response.status(400).json({ error: 'Term dates must fall within the school year' }); return; }
+    const term = await Term.create(input);
+    await writeAuditLog({ request, actorId: request.user!.id, action: 'term.created', entityType: 'Term', entityId: term.id, after: input });
+    response.status(201).json({ term });
   } catch (error) { next(error); }
 });
 

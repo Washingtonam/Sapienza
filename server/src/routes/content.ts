@@ -31,6 +31,14 @@ router.get('/pages/:slug', async (request, response, next) => {
   } catch (error) { next(error); }
 });
 
+router.get('/manage/pages', authenticate, requirePermission('content:manage'), async (_request, response, next) => {
+  try { response.json({ pages: await ContentPage.find().sort({ title: 1 }).lean() }); } catch (error) { next(error); }
+});
+
+router.get('/manage/media', authenticate, requirePermission('media:manage'), async (_request, response, next) => {
+  try { response.json({ media: await MediaAsset.find().sort({ key: 1, version: -1 }).lean() }); } catch (error) { next(error); }
+});
+
 router.get('/media', async (_request, response, next) => {
   try { response.json({ media: await MediaAsset.find({ isActive: true }).sort({ key: 1, version: -1 }).lean() }); } catch (error) { next(error); }
 });

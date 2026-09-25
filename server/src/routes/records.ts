@@ -8,6 +8,8 @@ import { Assessment } from '../models/Assessment.js';
 import { Grade } from '../models/Grade.js';
 import { ReportCard } from '../models/ReportCard.js';
 import { Student } from '../models/Student.js';
+import { StudentGuardian } from '../models/StudentGuardian.js';
+import { Term } from '../models/Term.js';
 import { Subject } from '../models/Subject.js';
 import { writeAuditLog } from '../services/audit.js';
 import type { AuthenticatedRequest } from '../types/auth.js';
@@ -78,6 +80,8 @@ router.get('/assessments', requirePermission('records:read'), async (request, re
 router.post('/assessments', requirePermission('records:manage'), async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = assessmentInput.parse(request.body);
+    const term = await Term.findOne({ schoolYearId: input.schoolYearId, name: input.term }).select('_id');
+    if (!term) { response.status(400).json({ error: 'Select a configured term for this school year' }); return; }
     const assessment = await Assessment.create(input);
     await writeAuditLog({ request, actorId: request.user!.id, action: 'assessment.created', entityType: 'Assessment', entityId: assessment.id, after: input });
     response.status(201).json({ assessment });
@@ -101,13 +105,30 @@ router.post('/grades', requirePermission('records:manage'), async (request: Auth
   } catch (error) { next(error); }
 });
 
-router.get('/report-cards', requirePermission('records:read'), async (request, response, next) => {
-  try { response.json({ reportCards: await ReportCard.find(request.query.studentId ? { studentId: request.query.studentId } : {}).populate('studentId').sort({ createdAt: -1 }).lean() }); } catch (error) { next(error); }
+router.get('/my-report-cards', async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const [students, guardianships] = await Promise.all([
+      Student.find({ userId: request.user!.id }).select('_id').lean(),
+      StudentGuardian.find({ guardianId: request.user!.id }).select('studentId').lean()
+    ]);
+    const studentIds = [...students.map((student) => student._id), ...guardianships.map((link) => link.studentId)];
+    const filter: Record<string, unknown> = { studentId: { $in: studentIds }, publishedAt: { $exists: true, $ne: null } };
+    if (request.query.schoolYearId) filter.schoolYearId = request.query.schoolYearId;
+    if (request.query.term) filter.term = request.query.term;
+    const reportCards = await ReportCard.find(filter).populate('schoolYearId', 'name startsAt endsAt').populate({ path: 'studentId', select: 'admissionNumber userId', populate: { path: 'userId', select: 'firstName lastName' } }).sort({ createdAt: -1 }).lean();
+    response.json({ reportCards });
+  } catch (error) { next(error); }
+});
+
+router.get('/report-cards', requirePermission('records:manage'), async (request, response, next) => {
+  try { response.json({ reportCards: await ReportCard.find(request.query.studentId ? { studentId: request.query.studentId } : {}).populate('studentId').populate('schoolYearId', 'name').sort({ createdAt: -1 }).lean() }); } catch (error) { next(error); }
 });
 
 router.post('/report-cards/:studentId/publish', requirePermission('records:manage'), async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = reportInput.parse(request.body);
+    const term = await Term.findOne({ schoolYearId: input.schoolYearId, name: input.term }).select('_id');
+    if (!term) { response.status(400).json({ error: 'Select a configured term for this school year' }); return; }
     const student = await Student.findById(request.params.studentId).select('classId');
     if (!student) { response.status(404).json({ error: 'Student not found' }); return; }
     const assessments = await Assessment.find({ classId: student.classId, schoolYearId: input.schoolYearId, term: input.term }).select('_id subjectId maxScore');
