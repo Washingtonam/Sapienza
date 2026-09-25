@@ -118,6 +118,18 @@ export function publicContent() {
   ]);
 }
 
+export function publishedPages() {
+  return request<{ pages: ManagedPage[] }>('/content/pages');
+}
+
+export function publicPage(slug: string) {
+  return request<{ page: ManagedPage }>(`/content/pages/${encodeURIComponent(slug)}`);
+}
+
+export function publicMedia() {
+  return request<{ media: Array<{ key: string; url: string; altText: string }> }>('/content/media');
+}
+
 export function managedPages() {
   return request<{ pages: ManagedPage[] }>('/content/manage/pages');
 }

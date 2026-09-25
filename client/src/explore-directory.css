@@ -1,0 +1,77 @@
+.explore-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 22px 0 8px;
+}
+
+.explore-filter label {
+  color: #18322d;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.explore-filter input {
+  grid-column: 1;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid #aab8ad;
+  border-radius: 3px;
+  background: #fff;
+  color: #18322d;
+  font: inherit;
+}
+
+.explore-filter input:focus-visible {
+  outline: 2px solid #b25b42;
+  outline-offset: 2px;
+}
+
+.explore-filter > span {
+  grid-column: 2;
+  grid-row: 2;
+  color: #53665d;
+  font-size: 13px;
+}
+
+.explore-no-results button,
+.explore-fetch-error button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #9a342d;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.explore-fetch-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 22px;
+}
+
+.explore-fetch-error .explore-message {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .explore-filter {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .explore-filter input,
+  .explore-filter > span {
+    grid-column: 1;
+  }
+
+  .explore-filter > span {
+    grid-row: auto;
+  }
+}

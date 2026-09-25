@@ -23,6 +23,10 @@ router.get('/notices', async (request, response, next) => {
   } catch (error) { next(error); }
 });
 
+router.get('/pages', async (_request, response, next) => {
+  try { response.json({ pages: await ContentPage.find({ status: 'published' }).sort({ title: 1 }).select('slug title sections').lean() }); } catch (error) { next(error); }
+});
+
 router.get('/pages/:slug', async (request, response, next) => {
   try {
     const page = await ContentPage.findOne({ slug: request.params.slug, status: 'published' }).lean();
