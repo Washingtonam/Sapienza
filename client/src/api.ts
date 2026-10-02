@@ -30,6 +30,7 @@ export type AdminDashboard = {
 
 export type SchoolYear = { _id: string; name: string; startsAt: string; endsAt: string; status: 'planned' | 'active' | 'closed' };
 export type SchoolTerm = { _id: string; schoolYearId: string; name: string; order: number; startsAt?: string; endsAt?: string };
+export type SchoolSubject = { _id: string; name: string; code: string; description?: string };
 export type SchoolClass = { _id: string; name: string; level: string; schoolYearId: string; classTeacherId?: string | { _id: string; userId?: { firstName: string; lastName: string } } | null };
 export type TeacherStaff = { _id: string; employeeNumber: string; userId: { firstName: string; lastName: string } };
 export type StaffRecord = { _id: string; employeeNumber: string; department?: string; jobTitle: string; employmentStatus: 'active' | 'on_leave' | 'ended'; hireDate?: string; userId: { firstName: string; lastName: string; email: string } };
@@ -41,6 +42,7 @@ export type FinanceClass = { _id: string; name: string; level: string; schoolYea
 export type FinanceStudent = { _id: string; admissionNumber: string; userId: { firstName: string; lastName: string }; classId?: { _id: string; name: string; level: string } };
 export type FeeStructureRecord = { _id: string; name: string; schoolYearId: { _id: string; name: string; status: SchoolYear['status'] }; classId: { _id: string; name: string; level: string }; items: Array<{ name: string; amount: number }>; totalAmount: number; dueDate: string };
 export type FinanceInvoice = { _id: string; studentId: FinanceStudent; feeStructureId: { _id: string; name: string; totalAmount: number }; amount: number; amountPaid: number; balance: number; status: 'unpaid' | 'partial' | 'paid' | 'overdue'; dueDate: string };
+export type StudentInvoice = { _id: string; feeStructureId: { _id: string; name: string; totalAmount: number }; amount: number; amountPaid: number; balance: number; status: 'unpaid' | 'partial' | 'paid' | 'overdue'; dueDate: string };
 export type PaymentTransaction = { _id: string; studentId: FinanceStudent | null; invoiceId: { _id: string; amount: number; amountPaid: number; balance: number; status: string; dueDate: string; feeStructureId?: { name: string } } | null; amount: number; provider: string; transactionReference: string; status: 'pending' | 'successful' | 'failed' | 'refunded'; paidAt?: string; createdAt: string };
 export type StudentReportCard = {
   _id: string;
@@ -61,6 +63,41 @@ export type ManagedPage = {
   title: string;
   sections: Array<{ key: string; heading?: string; body?: string; mediaKey?: string; order?: number }>;
   status: 'draft' | 'published';
+};
+
+export type NoticeRecord = {
+  _id: string;
+  title: string;
+  body: string;
+  category: string;
+  audience: 'public' | 'students' | 'parents' | 'staff' | 'alumni';
+  publishAt: string;
+  expiresAt?: string;
+  status: 'draft' | 'published' | 'archived';
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ThemePresetId = 'wine-and-beige' | 'midnight-ivory' | 'forest-gold' | 'sage-cream';
+export type SchoolSettings = {
+  themePreset: ThemePresetId;
+  schoolName: string;
+  tagline: string;
+  palette: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    background: string;
+    text: string;
+    muted: string;
+  };
+};
+
+export const themePresets: Record<ThemePresetId, { name: string; palette: SchoolSettings['palette'] }> = {
+  'wine-and-beige': { name: 'Wine & Beige', palette: { primary: '#4F1D2F', secondary: '#F4E9D8', accent: '#B77A59', background: '#F8F4EE', text: '#1F2937', muted: '#5F6C6D' } },
+  'midnight-ivory': { name: 'Midnight Ivory', palette: { primary: '#0F172A', secondary: '#F8F5F0', accent: '#C084FC', background: '#F4F1EE', text: '#0F172A', muted: '#475569' } },
+  'forest-gold': { name: 'Forest Gold', palette: { primary: '#173C35', secondary: '#F3EAD5', accent: '#C79D4A', background: '#F5F3EE', text: '#1C2A22', muted: '#4B5C52' } },
+  'sage-cream': { name: 'Sage Cream', palette: { primary: '#355C4F', secondary: '#F5F1E7', accent: '#B67852', background: '#F7F5F0', text: '#23362F', muted: '#58716B' } }
 };
 
 export type ManagedMedia = {
@@ -148,6 +185,24 @@ export function createFinanceInvoice(studentId: string, feeStructureId: string) 
   return request<{ invoice: FinanceInvoice }>('/finance/invoices', { method: 'POST', body: JSON.stringify({ studentId, feeStructureId }) });
 }
 
+export function myInvoices() {
+  return request<{ invoices: StudentInvoice[] }>('/finance/my-invoices');
+}
+
+export function initializeInvoicePayment(invoiceId: string, amount?: number) {
+  return request<{ payment: PaymentTransaction; authorizationUrl?: string | null; publicKey?: string | null; email?: string; reference: string; message?: string }>('/finance/payments/initialize', {
+    method: 'POST',
+    body: JSON.stringify({ invoiceId, amount })
+  });
+}
+
+export function verifyInvoicePayment(reference: string) {
+  return request<{ payment: PaymentTransaction; verified: boolean; status: string }>('/finance/payments/verify', {
+    method: 'POST',
+    body: JSON.stringify({ reference })
+  });
+}
+
 export function managedUsers() {
   return request<{ users: ManagedUser[] }>('/admin/users');
 }
@@ -174,6 +229,10 @@ export function schoolYears() {
 export function schoolTerms(schoolYearId?: string) {
   const query = schoolYearId ? `?schoolYearId=${encodeURIComponent(schoolYearId)}` : '';
   return request<{ terms: SchoolTerm[] }>(`/academics/terms${query}`);
+}
+
+export function schoolSubjects() {
+  return request<{ subjects: SchoolSubject[] }>('/academics/subjects');
 }
 
 export function schoolClasses(schoolYearId?: string) {
@@ -241,6 +300,14 @@ export function publicMedia() {
   return request<{ media: Array<{ key: string; url: string; altText: string }> }>('/content/media');
 }
 
+export function currentSchoolSettings() {
+  return request<{ settings: SchoolSettings }>('/content/settings');
+}
+
+export function saveSchoolSettings(input: Partial<SchoolSettings>) {
+  return request<{ settings: SchoolSettings }>('/content/settings', { method: 'PUT', body: JSON.stringify(input) });
+}
+
 export async function uploadImageToCloudinary(file: File) {
   const signature = await request<{ cloudName: string; apiKey: string; timestamp: number; folder: string; signature: string }>('/content/media/upload-signature', {
     method: 'POST',
@@ -262,6 +329,10 @@ export function managedPages() {
   return request<{ pages: ManagedPage[] }>('/content/manage/pages');
 }
 
+export function managedNotices() {
+  return request<{ notices: NoticeRecord[] }>('/content/manage/notices');
+}
+
 export function managedMedia() {
   return request<{ media: ManagedMedia[] }>('/content/manage/media');
 }
@@ -270,6 +341,65 @@ export function saveManagedPage(page: Omit<ManagedPage, '_id'>) {
   return request<{ page: ManagedPage }>('/content/pages', { method: 'POST', body: JSON.stringify(page) });
 }
 
+export function saveNotice(input: { title: string; body: string; category: string; audience: NoticeRecord['audience']; publishAt: string; expiresAt?: string; status: NoticeRecord['status'] }) {
+  return request<{ notice: NoticeRecord }>('/content/notices', { method: 'POST', body: JSON.stringify(input) });
+}
+
 export function saveManagedMedia(media: { key: string; url: string; storageProvider: string; publicId?: string; altText: string; section?: string }) {
   return request<{ media: ManagedMedia }>('/content/media', { method: 'POST', body: JSON.stringify(media) });
+}
+
+export type CbtExamRecord = {
+  _id: string;
+  title: string;
+  instructions?: string;
+  subjectId?: { _id: string; name: string; code?: string } | string;
+  classId?: { _id: string; name: string; level?: string } | string;
+  durationMinutes: number;
+  startsAt: string;
+  endsAt: string;
+  status: 'draft' | 'scheduled' | 'open' | 'closed';
+  published?: boolean;
+};
+
+export type CbtQuestionRecord = {
+  id: string;
+  questionText: string;
+  type: 'multiple_choice' | 'true_false' | 'short_answer';
+  options: string[];
+  points: number;
+  order: number;
+};
+
+export function cbtExams(classId?: string) {
+  const query = classId ? `?classId=${encodeURIComponent(classId)}` : '';
+  return request<{ exams: CbtExamRecord[] }>(`/cbt/exams${query}`);
+}
+
+export function cbtExamQuestions(examId: string) {
+  return request<{ exam: CbtExamRecord; questions: CbtQuestionRecord[] }>(`/cbt/exams/${encodeURIComponent(examId)}/questions`);
+}
+
+export function createCbtExam(input: { title: string; instructions?: string; subjectId: string; classId: string; durationMinutes: number; startsAt: string; endsAt: string; status?: CbtExamRecord['status']; published?: boolean }) {
+  return request<{ exam: CbtExamRecord }>('/cbt/exams', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function addCbtQuestion(examId: string, input: { questionText: string; type: CbtQuestionRecord['type']; options?: string[]; correctAnswer: string; points: number; order: number }) {
+  return request<{ question: CbtQuestionRecord }>(`/cbt/exams/${encodeURIComponent(examId)}/questions`, { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function startCbtExam(examId: string) {
+  return request<{ attempt: { id: string; startedAt: string; status: string } }>(`/cbt/exams/${encodeURIComponent(examId)}/start`, { method: 'POST', body: JSON.stringify({}) });
+}
+
+export function submitCbtExam(attemptId: string, answers: Array<{ questionId: string; answer?: string }>) {
+  return request<{ result: { attemptId: string; score: number; maxScore: number; percentage: number; status: string; submittedAt?: string } }>(`/cbt/attempts/${encodeURIComponent(attemptId)}/submit`, { method: 'POST', body: JSON.stringify({ answers }) });
+}
+
+export function myCbtResults() {
+  return request<{ results: Array<{ _id: string; examId?: { _id: string; title: string; subjectId?: { name: string; code?: string } }; score?: number; maxScore?: number; percentage?: number; status?: string; createdAt?: string; submittedAt?: string }> }>('/cbt/my-results');
+}
+
+export function cbtExamResults(examId: string) {
+  return request<{ results: Array<{ _id: string; studentId?: { _id: string; userId?: { firstName: string; lastName: string } }; score?: number; maxScore?: number; percentage?: number; status?: string }> }>(`/cbt/exams/${encodeURIComponent(examId)}/results`);
 }

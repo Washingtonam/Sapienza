@@ -16,7 +16,19 @@ const router = Router();
 const feeInput = z.object({ name: z.string().min(1), schoolYearId: z.string(), classId: z.string(), items: z.array(z.object({ name: z.string().min(1), amount: z.number().nonnegative() })).min(1), dueDate: z.coerce.date() });
 const invoiceInput = z.object({ studentId: z.string(), feeStructureId: z.string() });
 const paymentInput = z.object({ invoiceId: z.string(), amount: z.number().positive(), provider: z.string().min(1) });
+const initializePaymentInput = z.object({ invoiceId: z.string(), amount: z.number().positive().optional() });
+const verifyPaymentInput = z.object({ reference: z.string().min(1) });
 const webhookInput = z.object({ transactionReference: z.string().min(1), status: z.enum(['successful', 'failed', 'refunded']), paidAt: z.coerce.date().optional(), metadata: z.unknown().optional() });
+
+export function buildPaystackInitializationPayload({ reference, email, amount, callbackUrl }: { reference: string; email: string; amount: number; callbackUrl: string }) {
+  return {
+    email,
+    amount,
+    reference,
+    callback_url: callbackUrl,
+    currency: 'NGN'
+  };
+}
 
 function verifyWebhookSignature(payload: string, signature: string | undefined) {
   if (!signature) return false;
@@ -80,6 +92,116 @@ router.get('/payments', authenticate, requirePermission('finance:read'), async (
 
 router.get('/my-invoices', authenticate, async (request: AuthenticatedRequest, response, next) => {
   try { response.json({ invoices: await Invoice.find({ studentId: { $in: await accessibleStudentIds(request.user!.id) } }).populate('feeStructureId').sort({ dueDate: 1 }).lean() }); } catch (error) { next(error); }
+});
+
+router.post('/payments/initialize', authenticate, async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = initializePaymentInput.parse(request.body);
+    const invoice = await Invoice.findById(input.invoiceId).populate({ path: 'studentId', select: 'userId' }).lean();
+    if (!invoice) { response.status(404).json({ error: 'Invoice not found' }); return; }
+    const permittedStudents = (await accessibleStudentIds(request.user!.id)).map(String);
+    if (!permittedStudents.includes(String(invoice.studentId))) { response.status(403).json({ error: 'You cannot pay this invoice' }); return; }
+    const amount = Math.round((input.amount ?? invoice.balance) * 100);
+    if (amount <= 0 || amount > Math.round((invoice.balance ?? 0) * 100)) {
+      response.status(400).json({ error: 'Payment amount exceeds the invoice balance' });
+      return;
+    }
+    const reference = `SAPZ-${String(invoice._id)}-${Date.now()}`;
+    const callbackUrl = new URL('/student/fees', env.CLIENT_ORIGIN).toString();
+    const payment = await Payment.create({
+      invoiceId: invoice._id,
+      studentId: invoice.studentId,
+      amount: Number((amount / 100).toFixed(2)),
+      provider: 'paystack',
+      transactionReference: reference,
+      metadata: { callbackUrl, initiatedBy: request.user!.id }
+    });
+
+    if (!env.PAYSTACK_SECRET_KEY) {
+      response.status(202).json({
+        payment,
+        authorizationUrl: null,
+        publicKey: env.PAYSTACK_PUBLIC_KEY ?? null,
+        email: request.user!.email,
+        reference,
+        message: 'Paystack is not configured yet. Add PAYSTACK_SECRET_KEY and PAYSTACK_PUBLIC_KEY to enable live payment checkout.'
+      });
+      return;
+    }
+
+    const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(buildPaystackInitializationPayload({
+        reference,
+        email: request.user!.email,
+        amount,
+        callbackUrl
+      }))
+    });
+
+    const paystackData = await paystackResponse.json();
+    if (!paystackResponse.ok || !paystackData?.data?.authorization_url) {
+      throw new Error(paystackData?.message ?? 'Unable to initialize Paystack payment');
+    }
+
+    payment.metadata = {
+      ...(payment.metadata ?? {}),
+      authorizationUrl: paystackData.data.authorization_url,
+      paystackData: paystackData.data
+    };
+    payment.status = 'pending';
+    await payment.save();
+
+    response.status(201).json({
+      payment,
+      authorizationUrl: paystackData.data.authorization_url,
+      publicKey: env.PAYSTACK_PUBLIC_KEY ?? null,
+      email: request.user!.email,
+      reference
+    });
+  } catch (error) { next(error); }
+});
+
+router.post('/payments/verify', authenticate, async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = verifyPaymentInput.parse(request.body);
+    const payment = await Payment.findOne({ transactionReference: input.reference });
+    if (!payment) { response.status(404).json({ error: 'Payment not found' }); return; }
+    if (!env.PAYSTACK_SECRET_KEY) {
+      response.json({ payment, verified: false, status: payment.status, message: 'Paystack is not configured yet.' });
+      return;
+    }
+
+    const verifyResponse = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(input.reference)}`, {
+      headers: { Authorization: `Bearer ${env.PAYSTACK_SECRET_KEY}` }
+    });
+    const verifyData = await verifyResponse.json();
+    if (!verifyResponse.ok || !verifyData?.data) {
+      throw new Error(verifyData?.message ?? 'Unable to verify Paystack transaction');
+    }
+
+    const status = verifyData.data.status === 'success' ? 'successful' : verifyData.data.status === 'failed' ? 'failed' : 'pending';
+    payment.status = status;
+    payment.paidAt = status === 'successful' ? verifyData.data.paid_at ? new Date(verifyData.data.paid_at) : new Date() : undefined;
+    payment.metadata = { ...(payment.metadata ?? {}), verifiedAt: new Date().toISOString(), gateway: verifyData.data.gateway, response: verifyData.data.gateway_response };
+    await payment.save();
+
+    if (status === 'successful') {
+      const invoice = await Invoice.findById(payment.invoiceId);
+      if (invoice) {
+        invoice.amountPaid = Math.min(invoice.amount, invoice.amountPaid + payment.amount);
+        invoice.balance = invoice.amount - invoice.amountPaid;
+        invoice.status = invoice.balance === 0 ? 'paid' : invoice.amountPaid === 0 ? 'unpaid' : 'partial';
+        await invoice.save();
+      }
+    }
+
+    response.json({ payment, verified: true, status });
+  } catch (error) { next(error); }
 });
 
 router.post('/invoices', authenticate, requirePermission('finance:manage'), async (request: AuthenticatedRequest, response, next) => {

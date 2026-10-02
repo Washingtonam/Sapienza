@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { adminDashboard, currentUser, login, publicContent, type AdminDashboard, type SessionUser } from './api';
+import { adminDashboard, currentSchoolSettings, currentUser, login, publicContent, type AdminDashboard, type SchoolSettings, type SessionUser } from './api';
 import { ContentManagement } from './ContentManagement';
 import { AcademicSetupPage } from './AcademicSetupPage';
 import { StudentResultsPage } from './StudentResultsPage';
 import { UserRoleManagement } from './UserRoleManagement';
 import { StudentEnrollmentPage } from './StudentEnrollmentPage';
 import { BursarFinancePage } from './BursarFinancePage';
+import { StudentFeesPage } from './StudentFeesPage';
 import { RegistrarRecordsPage, RegistrarStaffPage } from './RegistrarWorkspaces';
 import { ExploreDirectory, ExplorePage } from './ExploreSapienza';
+import { CbtWorkspace } from './CbtWorkspace';
 import './academic.css';
 
 type Notice = { title: string; body: string; category: string };
@@ -24,8 +26,36 @@ function homeFor(user: SessionUser) {
 
 function PublicLayout({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settings, setSettings] = useState<SchoolSettings>({
+    themePreset: 'wine-and-beige',
+    schoolName: 'SAPIENZA',
+    tagline: 'Catholic School',
+    palette: {
+      primary: '#4F1D2F',
+      secondary: '#F4E9D8',
+      accent: '#B77A59',
+      background: '#F8F4EE',
+      text: '#1F2937',
+      muted: '#5F6C6D'
+    }
+  });
+
+  useEffect(() => {
+    currentSchoolSettings().then(({ settings: nextSettings }) => setSettings(nextSettings)).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--color-primary', settings.palette.primary);
+    root.style.setProperty('--color-secondary', settings.palette.secondary);
+    root.style.setProperty('--color-accent', settings.palette.accent);
+    root.style.setProperty('--color-background', settings.palette.background);
+    root.style.setProperty('--color-text', settings.palette.text);
+    root.style.setProperty('--color-muted', settings.palette.muted);
+  }, [settings]);
+
   const closeMenu = () => setMenuOpen(false);
-  return <main className="page-shell"><nav className="site-nav"><Link className="brand" to="/" onClick={closeMenu}><strong>SAPIENZA</strong><span>Catholic School</span></Link><button className="nav-toggle" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="public-navigation" onClick={() => setMenuOpen((open) => !open)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span></button><div className="site-menu" id="public-navigation" hidden={!menuOpen}><Link to="/" onClick={closeMenu}>Home</Link><Link to="/explore" onClick={closeMenu}>Explore</Link><Link to="/#portals" onClick={closeMenu}>Portals</Link><Link to="/admissions" onClick={closeMenu}>Admissions</Link><div className="nav-actions">{user ? <><Link to={homeFor(user)} onClick={closeMenu}>Open portal</Link><button onClick={() => { closeMenu(); onLogout(); }}>Sign out</button></> : <Link to="/login" onClick={closeMenu}>Sign in</Link>}</div></div></nav><Outlet /></main>;
+  return <main className="page-shell"><nav className="site-nav"><Link className="brand" to="/" onClick={closeMenu}><strong>{settings.schoolName}</strong><span>{settings.tagline}</span></Link><button className="nav-toggle" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="public-navigation" onClick={() => setMenuOpen((open) => !open)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span></button><div className="site-menu" id="public-navigation" hidden={!menuOpen}><Link to="/" onClick={closeMenu}>Home</Link><Link to="/explore" onClick={closeMenu}>Explore</Link><Link to="/#portals" onClick={closeMenu}>Portals</Link><Link to="/admissions" onClick={closeMenu}>Admissions</Link><div className="nav-actions">{user ? <><Link to={homeFor(user)} onClick={closeMenu}>Open portal</Link><button onClick={() => { closeMenu(); onLogout(); }}>Sign out</button></> : <Link to="/login" onClick={closeMenu}>Sign in</Link>}</div></div></nav><Outlet /></main>;
 }
 
 function Landing({ user }: { user: SessionUser | null }) {
@@ -119,11 +149,14 @@ export function App() { const [user, setUser] = useState<SessionUser | null>(nul
     <Route element={<ProtectedRoute user={user} roles={['student']} />}>
       <Route path="/student" element={<DashboardPage kind="student" />} />
       <Route path="/student/records" element={<StudentResultsPage />} />
+      <Route path="/student/fees" element={<StudentFeesPage />} />
+      <Route path="/student/cbt" element={<CbtWorkspace user={user!} />} />
       <Route path="/student/*" element={<PlaceholderPage />} />
     </Route>
     <Route element={<ProtectedRoute user={user} roles={['teacher']} />}>
       <Route path="/staff" element={<DashboardPage kind="staff" />} />
       <Route path="/staff/students" element={<StudentEnrollmentPage />} />
+      <Route path="/staff/cbt" element={<CbtWorkspace user={user!} />} />
       <Route path="/staff/*" element={<PlaceholderPage />} />
     </Route>
     <Route element={<ProtectedRoute user={user} roles={['bursar']} />}>

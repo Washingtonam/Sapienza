@@ -7,7 +7,8 @@ import { AlumniPost } from '../models/AlumniPost.js';
 import { AlumniProfile } from '../models/AlumniProfile.js';
 import { ContentPage } from '../models/ContentPage.js';
 import { MediaAsset } from '../models/MediaAsset.js';
-import { Notice } from '../models/Notice.js';
+import { buildPublicNoticeQuery, Notice } from '../models/Notice.js';
+import { defaultSchoolSettings, resolveSchoolSettings, SchoolSettings, themePresets } from '../models/SchoolSettings.js';
 import { writeAuditLog } from '../services/audit.js';
 import type { AuthenticatedRequest } from '../types/auth.js';
 
@@ -15,14 +16,31 @@ const router = Router();
 const noticeInput = z.object({ title: z.string().min(1), body: z.string().min(1), category: z.string().min(1), audience: z.enum(['public', 'students', 'parents', 'staff', 'alumni']).default('public'), publishAt: z.coerce.date(), expiresAt: z.coerce.date().optional(), status: z.enum(['draft', 'published', 'archived']).default('draft') });
 const pageInput = z.object({ slug: z.string().min(1), title: z.string().min(1), sections: z.array(z.object({ key: z.string().min(1), heading: z.string().optional(), body: z.string().optional(), mediaKey: z.string().optional(), order: z.number().optional() })), status: z.enum(['draft', 'published']).default('draft') });
 const mediaInput = z.object({ key: z.string().min(1), url: z.string().url(), storageProvider: z.string().min(1), publicId: z.string().optional(), altText: z.string().min(1), section: z.string().optional() });
+const settingsInput = z.object({
+  themePreset: z.enum(Object.keys(themePresets) as [keyof typeof themePresets, ...(keyof typeof themePresets)[]]).optional(),
+  schoolName: z.string().trim().min(1).optional(),
+  tagline: z.string().trim().min(1).optional(),
+  palette: z.object({
+    primary: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+    secondary: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+    accent: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+    background: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+    text: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional(),
+    muted: z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional()
+  }).partial().optional()
+});
 const profileInput = z.object({ graduationYear: z.number().int().min(1900).max(2200), formerClass: z.string().optional(), currentOccupation: z.string().optional(), location: z.string().optional(), biography: z.string().optional(), visibility: z.enum(['public', 'members']).optional() });
 const postInput = z.object({ title: z.string().min(1), body: z.string().min(1), status: z.enum(['draft', 'published']).default('draft') });
 
 router.get('/notices', async (request, response, next) => {
   try {
     const now = new Date();
-    response.json({ notices: await Notice.find({ audience: 'public', status: 'published', publishAt: { $lte: now }, $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }] }).sort({ publishAt: -1 }).lean() });
+    response.json({ notices: await Notice.find(buildPublicNoticeQuery(now)).sort({ publishAt: -1 }).lean() });
   } catch (error) { next(error); }
+});
+
+router.get('/manage/notices', authenticate, requirePermission('content:manage'), async (_request, response, next) => {
+  try { response.json({ notices: await Notice.find().sort({ publishAt: -1 }).lean() }); } catch (error) { next(error); }
 });
 
 router.get('/pages', async (_request, response, next) => {
@@ -43,6 +61,23 @@ router.get('/manage/pages', authenticate, requirePermission('content:manage'), a
 
 router.get('/manage/media', authenticate, requirePermission('media:manage'), async (_request, response, next) => {
   try { response.json({ media: await MediaAsset.find().sort({ key: 1, version: -1 }).lean() }); } catch (error) { next(error); }
+});
+
+router.get('/settings', async (_request, response, next) => {
+  try {
+    const active = await SchoolSettings.findOne({ status: 'published' }).lean();
+    response.json({ settings: resolveSchoolSettings(active ?? defaultSchoolSettings) });
+  } catch (error) { next(error); }
+});
+
+router.put('/settings', authenticate, requirePermission('content:manage'), async (request: AuthenticatedRequest, response, next) => {
+  try {
+    const input = settingsInput.parse(request.body);
+    const nextSettings = resolveSchoolSettings(input);
+    const settings = await SchoolSettings.findOneAndUpdate({ status: 'published' }, { ...nextSettings, status: 'published' }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true });
+    await writeAuditLog({ request, actorId: request.user!.id, action: 'school_settings.updated', entityType: 'SchoolSettings', entityId: settings!.id, after: settings!.toObject() });
+    response.json({ settings: resolveSchoolSettings(settings?.toObject() ?? nextSettings) });
+  } catch (error) { next(error); }
 });
 
 router.post('/media/upload-signature', authenticate, requirePermission('media:manage'), (_request, response) => {

@@ -1,5 +1,17 @@
 import { Schema, model } from 'mongoose';
 
+export function buildPublicNoticeQuery(now = new Date()) {
+  return {
+    audience: 'public',
+    status: 'published',
+    publishAt: { $lte: now },
+    $or: [
+      { expiresAt: { $exists: false } },
+      { expiresAt: { $gt: now } }
+    ]
+  };
+}
+
 const noticeSchema = new Schema({
   title: { type: String, required: true, trim: true },
   body: { type: String, required: true },

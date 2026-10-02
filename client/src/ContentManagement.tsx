@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { managedMedia, managedPages, publicMedia, saveManagedMedia, saveManagedPage, uploadImageToCloudinary, type ManagedMedia, type ManagedPage, type SessionUser } from './api';
+import { currentSchoolSettings, managedMedia, managedNotices, managedPages, publicMedia, saveManagedMedia, saveManagedPage, saveNotice, saveSchoolSettings, themePresets, uploadImageToCloudinary, type ManagedMedia, type ManagedPage, type NoticeRecord, type SchoolSettings, type SessionUser } from './api';
 import './content-management.css';
 
 const anthemSections = [
@@ -12,17 +12,39 @@ const anthemSections = [
 
 type EditorSection = ManagedPage['sections'][number];
 type SectionImageDraft = { source: 'library' | 'url' | 'upload'; url: string; file?: File };
+type NoticeDraft = {
+  title: string;
+  body: string;
+  category: string;
+  audience: NoticeRecord['audience'];
+  publishAt: string;
+  expiresAt: string;
+  status: NoticeRecord['status'];
+};
 
 function blankPage(): Omit<ManagedPage, '_id'> {
   return { slug: '', title: '', status: 'draft', sections: [] };
+}
+
+function blankNotice(): NoticeDraft {
+  return {
+    title: '',
+    body: '',
+    category: 'General',
+    audience: 'public',
+    publishAt: new Date().toISOString().slice(0, 16),
+    expiresAt: '',
+    status: 'draft'
+  };
 }
 
 export function ContentManagement({ user }: { user: SessionUser }) {
   const permissions = new Set(user.roles?.flatMap((role) => role.permissions) ?? []);
   const canManageContent = permissions.has('content:manage');
   const canManageMedia = permissions.has('media:manage');
-  const [tab, setTab] = useState<'pages' | 'media'>(canManageContent ? 'pages' : 'media');
+  const [tab, setTab] = useState<'pages' | 'notices' | 'media'>(canManageContent ? 'pages' : 'media');
   const [pages, setPages] = useState<ManagedPage[]>([]);
+  const [notices, setNotices] = useState<NoticeRecord[]>([]);
   const [mediaAssets, setMediaAssets] = useState<ManagedMedia[]>([]);
   const [sectionMedia, setSectionMedia] = useState<Array<{ key: string; url: string; altText: string }>>([]);
   const [sectionImageDrafts, setSectionImageDrafts] = useState<Record<string, SectionImageDraft>>({});
@@ -32,6 +54,14 @@ export function ContentManagement({ user }: { user: SessionUser }) {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [brandingSaving, setBrandingSaving] = useState(false);
+  const [branding, setBranding] = useState<Pick<SchoolSettings, 'themePreset' | 'schoolName' | 'tagline'>>({
+    themePreset: 'wine-and-beige',
+    schoolName: 'SAPIENZA',
+    tagline: 'Catholic School'
+  });
+  const [noticeDraft, setNoticeDraft] = useState<NoticeDraft>(blankNotice());
+  const [brandingMessage, setBrandingMessage] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -39,15 +69,19 @@ export function ContentManagement({ user }: { user: SessionUser }) {
     setLoading(true);
     setError('');
     const results = await Promise.allSettled([
-      ...(canManageContent ? [managedPages()] : []),
+      ...(canManageContent ? [managedPages(), managedNotices()] : []),
       ...(canManageMedia ? [managedMedia()] : [])
     ]);
     let resultIndex = 0;
     if (canManageContent) {
-      const result = results[resultIndex++];
-      if (result.status === 'fulfilled') {
-        if ('pages' in result.value) setPages(result.value.pages);
-      } else setError(result.reason instanceof Error ? result.reason.message : 'Unable to load pages');
+      const pagesResult = results[resultIndex++];
+      if (pagesResult.status === 'fulfilled') {
+        if ('pages' in pagesResult.value) setPages(pagesResult.value.pages);
+      } else setError(pagesResult.reason instanceof Error ? pagesResult.reason.message : 'Unable to load pages');
+      const noticesResult = results[resultIndex++];
+      if (noticesResult.status === 'fulfilled') {
+        if ('notices' in noticesResult.value) setNotices(noticesResult.value.notices);
+      } else setError(noticesResult.reason instanceof Error ? noticesResult.reason.message : 'Unable to load notices');
     }
     if (canManageMedia) {
       const result = results[resultIndex];
@@ -60,8 +94,60 @@ export function ContentManagement({ user }: { user: SessionUser }) {
 
   useEffect(() => {
     void refresh();
-    if (canManageContent) void publicMedia().then((result) => setSectionMedia(result.media)).catch(() => undefined);
-  }, []);
+    if (canManageContent) {
+      void currentSchoolSettings().then(({ settings }) => setBranding({
+        themePreset: settings.themePreset,
+        schoolName: settings.schoolName,
+        tagline: settings.tagline
+      })).catch(() => undefined);
+      void publicMedia().then((result) => setSectionMedia(result.media)).catch(() => undefined);
+    }
+  }, [canManageContent]);
+
+  async function submitBranding(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBrandingSaving(true);
+    setBrandingMessage('');
+    try {
+      const payload = {
+        ...branding,
+        palette: themePresets[branding.themePreset].palette
+      };
+      const result = await saveSchoolSettings(payload);
+      setBranding({
+        themePreset: result.settings.themePreset,
+        schoolName: result.settings.schoolName,
+        tagline: result.settings.tagline
+      });
+      setBrandingMessage('Branding saved. The public site theme has been updated.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save school branding');
+    } finally {
+      setBrandingSaving(false);
+    }
+  }
+
+  async function submitNotice(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const payload = {
+        ...noticeDraft,
+        publishAt: new Date(noticeDraft.publishAt).toISOString(),
+        expiresAt: noticeDraft.expiresAt ? new Date(noticeDraft.expiresAt).toISOString() : undefined
+      };
+      const result = await saveNotice(payload);
+      setNotices((current) => [result.notice, ...current.filter((notice) => notice._id !== result.notice._id)].sort((left, right) => new Date(right.publishAt).getTime() - new Date(left.publishAt).getTime()));
+      setNoticeDraft(blankNotice());
+      setMessage('Notice saved. It is now available through the public notice board when published.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save notice');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   function selectPage(selected: ManagedPage) {
     setPage({ slug: selected.slug, title: selected.title, status: selected.status, sections: selected.sections.map((section) => ({ ...section })) });
@@ -191,12 +277,27 @@ export function ContentManagement({ user }: { user: SessionUser }) {
       <div><small>SCHOOL WEBSITE</small><h2>Content &amp; media</h2><p>Update public information and image references without changing application code.</p></div>
       <div className="content-manager-tabs" role="tablist" aria-label="Content management area">
         {canManageContent && <button type="button" role="tab" aria-selected={tab === 'pages'} onClick={() => setTab('pages')}>Pages</button>}
+        {canManageContent && <button type="button" role="tab" aria-selected={tab === 'notices'} onClick={() => setTab('notices')}>Notices</button>}
         {canManageMedia && <button type="button" role="tab" aria-selected={tab === 'media'} onClick={() => setTab('media')}>Images</button>}
       </div>
     </div>
 
     {error && <p className="content-manager-message error" role="alert">{error}</p>}
     {message && <p className="content-manager-message success" role="status">{message}</p>}
+    {canManageContent && <form className="branding-editor" onSubmit={submitBranding}>
+      <div className="branding-header"><div><small>BRANDING</small><h3>School theme</h3></div><button className="save-content" type="submit" disabled={brandingSaving}>{brandingSaving ? 'Saving...' : 'Save theme'}</button></div>
+      <div className="editor-fields">
+        <label>School name<input value={branding.schoolName} onChange={(event) => setBranding((current) => ({ ...current, schoolName: event.target.value }))} required /></label>
+        <label>Tagline<input value={branding.tagline} onChange={(event) => setBranding((current) => ({ ...current, tagline: event.target.value }))} required /></label>
+      </div>
+      <div className="theme-preset-list" role="listbox" aria-label="Theme presets">
+        {Object.entries(themePresets).map(([key, preset]) => <button key={key} type="button" className={`theme-preset${branding.themePreset === key ? ' active' : ''}`} onClick={() => setBranding((current) => ({ ...current, themePreset: key as SchoolSettings['themePreset'] }))}>
+          <span className="theme-preset-swatch" style={{ background: `linear-gradient(90deg, ${preset.palette.primary} 0 35%, ${preset.palette.accent} 35% 60%, ${preset.palette.secondary} 60% 100%)` }} aria-hidden="true" />
+          <span><strong>{preset.name}</strong><small>{preset.palette.primary}</small></span>
+        </button>)}
+      </div>
+      {brandingMessage && <p className="content-manager-message success" role="status">{brandingMessage}</p>}
+    </form>}
     {loading ? <p className="muted">Loading editable content...</p> : tab === 'pages' && canManageContent ? <div className="content-manager-layout">
       <aside className="managed-list" aria-label="Saved pages">
         <div className="managed-list-title"><strong>Pages</strong><button type="button" onClick={() => { setPage(blankPage()); setMessage(''); }}>New page</button></div>
@@ -236,6 +337,24 @@ export function ContentManagement({ user }: { user: SessionUser }) {
         {!page.sections.length && <p className="muted">Add a section for each piece of information. Text and image keys stay editable.</p>}
         <button className="save-content" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save page'}</button>
       </form>
+    </div> : tab === 'notices' && canManageContent ? <div className="content-manager-layout notice-layout">
+      <form className="content-editor notice-editor" onSubmit={submitNotice}>
+        <div><small>NOTICE BOARD</small><h3>Create a school announcement</h3><p>Schedule updates for families, students, staff, or alumni. Only public published notices appear on the landing page.</p></div>
+        <div className="editor-fields">
+          <label>Notice title<input value={noticeDraft.title} onChange={(event) => setNoticeDraft((current) => ({ ...current, title: event.target.value }))} required /></label>
+          <label>Category<input value={noticeDraft.category} onChange={(event) => setNoticeDraft((current) => ({ ...current, category: event.target.value }))} required /></label>
+          <label>Audience<select value={noticeDraft.audience} onChange={(event) => setNoticeDraft((current) => ({ ...current, audience: event.target.value as NoticeRecord['audience'] }))}><option value="public">Public</option><option value="students">Students</option><option value="parents">Parents</option><option value="staff">Staff</option><option value="alumni">Alumni</option></select></label>
+          <label>Status<select value={noticeDraft.status} onChange={(event) => setNoticeDraft((current) => ({ ...current, status: event.target.value as NoticeRecord['status'] }))}><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
+          <label>Publish date<input type="datetime-local" value={noticeDraft.publishAt} onChange={(event) => setNoticeDraft((current) => ({ ...current, publishAt: event.target.value }))} required /></label>
+          <label>Expiry date (optional)<input type="datetime-local" value={noticeDraft.expiresAt} onChange={(event) => setNoticeDraft((current) => ({ ...current, expiresAt: event.target.value }))} /></label>
+          <label className="wide-field">Message<textarea rows={6} value={noticeDraft.body} onChange={(event) => setNoticeDraft((current) => ({ ...current, body: event.target.value }))} required /></label>
+        </div>
+        <button className="save-content" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save notice'}</button>
+      </form>
+      <aside className="managed-list notice-list" aria-label="Saved notices">
+        <div className="managed-list-title"><strong>Latest notices</strong><button type="button" onClick={() => setNoticeDraft(blankNotice())}>Clear draft</button></div>
+        {notices.length ? notices.map((notice) => <article key={notice._id} className="notice-item"><strong>{notice.title}</strong><span>{notice.category} · {notice.audience}</span><small>{notice.status} · {new Date(notice.publishAt).toLocaleString()}</small></article>) : <p className="muted">No notices have been published yet.</p>}
+      </aside>
     </div> : tab === 'media' && canManageMedia ? <div className="content-manager-layout media-layout">
       <form className="content-editor media-editor" onSubmit={submitMedia}>
         <div><small>IMAGE LIBRARY</small><h3>Add or replace a school image</h3><p>The image key is a reference name used by page sections. Add an image here, then choose it in the section image list.</p></div>
