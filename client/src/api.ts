@@ -28,6 +28,46 @@ export type AdminDashboard = {
   cbt: { attempts: number; averagePercentage: number };
 };
 
+export type AttendanceRecord = {
+  _id: string;
+  studentId: { _id: string; admissionNumber: string; userId: { firstName: string; lastName: string } } | string;
+  classId: string;
+  date: string;
+  status: 'present' | 'absent' | 'late' | 'excused';
+  remarks?: string;
+};
+
+export type AssignmentRecord = {
+  _id: string;
+  title: string;
+  description: string;
+  subjectId: { _id: string; name: string; code: string } | string;
+  classId: string;
+  dueAt: string;
+  status: 'draft' | 'published' | 'closed';
+};
+
+export type AssessmentRecord = {
+  _id: string;
+  title: string;
+  type: 'test' | 'exam' | 'project' | 'assignment';
+  subjectId: { _id: string; name: string; code: string } | string;
+  classId: string;
+  schoolYearId: string;
+  term: string;
+  maxScore: number;
+  published: boolean;
+};
+
+export type GradeRecord = {
+  _id: string;
+  assessmentId: AssessmentRecord | string;
+  studentId: string;
+  score: number;
+  grade?: string;
+  remarks?: string;
+};
+
 export type SchoolYear = { _id: string; name: string; startsAt: string; endsAt: string; status: 'planned' | 'active' | 'closed' };
 export type SchoolTerm = { _id: string; schoolYearId: string; name: string; order: number; startsAt?: string; endsAt?: string };
 export type SchoolSubject = { _id: string; name: string; code: string; description?: string };
@@ -155,6 +195,63 @@ export function currentUser() {
 
 export function adminDashboard() {
   return request<AdminDashboard>('/operations/dashboard');
+}
+
+export function recordsAttendance(filters: { classId?: string; date?: string } = {}) {
+  const query = new URLSearchParams(Object.entries(filters).filter((entry): entry is [string, string] => Boolean(entry[1]))).toString();
+  return request<{ attendance: AttendanceRecord[] }>(`/records/attendance${query ? `?${query}` : ''}`);
+}
+
+export function saveAttendance(input: { studentId: string; classId: string; date: string; status: AttendanceRecord['status']; remarks?: string }) {
+  return request<{ attendance: AttendanceRecord }>('/records/attendance', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function recordsAssignments(classId?: string) {
+  const query = classId ? `?classId=${encodeURIComponent(classId)}` : '';
+  return request<{ assignments: AssignmentRecord[] }>(`/records/assignments${query}`);
+}
+
+export function createRecordAssignment(input: { title: string; description: string; subjectId: string; classId: string; dueAt: string; status: AssignmentRecord['status'] }) {
+  return request<{ assignment: AssignmentRecord }>('/records/assignments', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function submitRecordAssignment(input: { assignmentId: string; answerText: string }) {
+  return request<{ submission: { _id: string; status: string; submittedAt?: string } }>('/records/assignment-submissions', { method: 'POST', body: JSON.stringify({ ...input, status: 'submitted' }) });
+}
+
+export function recordsAssessments(classId?: string) {
+  const query = classId ? `?classId=${encodeURIComponent(classId)}` : '';
+  return request<{ assessments: AssessmentRecord[] }>(`/records/assessments${query}`);
+}
+
+export function createRecordAssessment(input: { title: string; type: AssessmentRecord['type']; subjectId: string; classId: string; schoolYearId: string; term: string; maxScore: number; published: boolean }) {
+  return request<{ assessment: AssessmentRecord }>('/records/assessments', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function recordsGrades() {
+  return request<{ grades: GradeRecord[] }>('/records/grades');
+}
+
+export function saveRecordGrade(input: { assessmentId: string; studentId: string; score: number; grade?: string; remarks?: string }) {
+  return request<{ grade: GradeRecord }>('/records/grades', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function downloadOperationsReport(report: 'attendance' | 'invoices' | 'cbt-results') {
+  const token = localStorage.getItem('sapienza.token');
+  const response = await fetch(`${API_URL}/operations/exports/${report}.csv`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(data.error ?? 'Unable to download report');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${report}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function financeClasses() {

@@ -38,7 +38,7 @@ function blankNotice(): NoticeDraft {
   };
 }
 
-export function ContentManagement({ user }: { user: SessionUser }) {
+export function ContentManagement({ user, settings, onSettingsChange }: { user: SessionUser; settings: SchoolSettings; onSettingsChange: (settings: SchoolSettings) => void }) {
   const permissions = new Set(user.roles?.flatMap((role) => role.permissions) ?? []);
   const canManageContent = permissions.has('content:manage');
   const canManageMedia = permissions.has('media:manage');
@@ -114,6 +114,7 @@ export function ContentManagement({ user }: { user: SessionUser }) {
         palette: themePresets[branding.themePreset].palette
       };
       const result = await saveSchoolSettings(payload);
+      onSettingsChange(result.settings);
       setBranding({
         themePreset: result.settings.themePreset,
         schoolName: result.settings.schoolName,
@@ -125,6 +126,13 @@ export function ContentManagement({ user }: { user: SessionUser }) {
     } finally {
       setBrandingSaving(false);
     }
+  }
+
+  function previewTheme(themePreset: SchoolSettings['themePreset']) {
+    const nextBranding = { ...branding, themePreset };
+    setBranding(nextBranding);
+    onSettingsChange({ ...settings, ...nextBranding, palette: themePresets[themePreset].palette });
+    setBrandingMessage('');
   }
 
   async function submitNotice(event: React.FormEvent<HTMLFormElement>) {
@@ -290,8 +298,8 @@ export function ContentManagement({ user }: { user: SessionUser }) {
         <label>School name<input value={branding.schoolName} onChange={(event) => setBranding((current) => ({ ...current, schoolName: event.target.value }))} required /></label>
         <label>Tagline<input value={branding.tagline} onChange={(event) => setBranding((current) => ({ ...current, tagline: event.target.value }))} required /></label>
       </div>
-      <div className="theme-preset-list" role="listbox" aria-label="Theme presets">
-        {Object.entries(themePresets).map(([key, preset]) => <button key={key} type="button" className={`theme-preset${branding.themePreset === key ? ' active' : ''}`} onClick={() => setBranding((current) => ({ ...current, themePreset: key as SchoolSettings['themePreset'] }))}>
+      <div className="theme-preset-list" role="group" aria-label="Theme presets">
+        {Object.entries(themePresets).map(([key, preset]) => <button key={key} type="button" aria-pressed={branding.themePreset === key} className={`theme-preset${branding.themePreset === key ? ' active' : ''}`} onClick={() => previewTheme(key as SchoolSettings['themePreset'])}>
           <span className="theme-preset-swatch" style={{ background: `linear-gradient(90deg, ${preset.palette.primary} 0 35%, ${preset.palette.accent} 35% 60%, ${preset.palette.secondary} 60% 100%)` }} aria-hidden="true" />
           <span><strong>{preset.name}</strong><small>{preset.palette.primary}</small></span>
         </button>)}

@@ -20,7 +20,7 @@ router.use(authenticate);
 
 const attendanceInput = z.object({ studentId: z.string(), classId: z.string(), subjectId: z.string().optional(), date: z.coerce.date(), status: z.enum(['present', 'absent', 'late', 'excused']), remarks: z.string().optional() });
 const assignmentInput = z.object({ title: z.string().min(1), description: z.string().min(1), subjectId: z.string(), classId: z.string(), dueAt: z.coerce.date(), attachments: z.array(z.object({ name: z.string(), url: z.string().url() })).optional(), status: z.enum(['draft', 'published', 'closed']).optional() });
-const submissionInput = z.object({ assignmentId: z.string(), studentId: z.string(), answerText: z.string().optional(), files: z.array(z.object({ name: z.string(), url: z.string().url() })).optional(), status: z.enum(['draft', 'submitted']).default('submitted') });
+const submissionInput = z.object({ assignmentId: z.string(), studentId: z.string().optional(), answerText: z.string().optional(), files: z.array(z.object({ name: z.string(), url: z.string().url() })).optional(), status: z.enum(['draft', 'submitted']).default('submitted') });
 const assessmentInput = z.object({ title: z.string().min(1), type: z.enum(['test', 'exam', 'project', 'assignment']), subjectId: z.string(), classId: z.string(), schoolYearId: z.string(), term: z.string().min(1), maxScore: z.number().positive(), published: z.boolean().optional() });
 const gradeInput = z.object({ assessmentId: z.string(), studentId: z.string(), score: z.number().min(0), grade: z.string().optional(), remarks: z.string().optional() });
 const reportInput = z.object({ schoolYearId: z.string(), term: z.string().min(1), teacherComment: z.string().optional(), principalComment: z.string().optional() });

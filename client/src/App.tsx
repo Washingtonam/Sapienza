@@ -11,6 +11,7 @@ import { StudentFeesPage } from './StudentFeesPage';
 import { RegistrarRecordsPage, RegistrarStaffPage } from './RegistrarWorkspaces';
 import { ExploreDirectory, ExplorePage } from './ExploreSapienza';
 import { CbtWorkspace } from './CbtWorkspace';
+import { AssignmentsWorkspace, AttendanceWorkspace, GradesWorkspace, ReportsWorkspace } from './RecordsWorkspaces';
 import './academic.css';
 
 type Notice = { title: string; body: string; category: string };
@@ -24,36 +25,8 @@ function homeFor(user: SessionUser) {
   return roles.includes('teacher') ? '/staff' : '/student';
 }
 
-function PublicLayout({ user, onLogout }: { user: SessionUser | null; onLogout: () => void }) {
+function PublicLayout({ user, settings, onLogout }: { user: SessionUser | null; settings: SchoolSettings; onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settings, setSettings] = useState<SchoolSettings>({
-    themePreset: 'wine-and-beige',
-    schoolName: 'SAPIENZA',
-    tagline: 'Catholic School',
-    palette: {
-      primary: '#4F1D2F',
-      secondary: '#F4E9D8',
-      accent: '#B77A59',
-      background: '#F8F4EE',
-      text: '#1F2937',
-      muted: '#5F6C6D'
-    }
-  });
-
-  useEffect(() => {
-    currentSchoolSettings().then(({ settings: nextSettings }) => setSettings(nextSettings)).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty('--color-primary', settings.palette.primary);
-    root.style.setProperty('--color-secondary', settings.palette.secondary);
-    root.style.setProperty('--color-accent', settings.palette.accent);
-    root.style.setProperty('--color-background', settings.palette.background);
-    root.style.setProperty('--color-text', settings.palette.text);
-    root.style.setProperty('--color-muted', settings.palette.muted);
-  }, [settings]);
-
   const closeMenu = () => setMenuOpen(false);
   return <main className="page-shell"><nav className="site-nav"><Link className="brand" to="/" onClick={closeMenu}><strong>{settings.schoolName}</strong><span>{settings.tagline}</span></Link><button className="nav-toggle" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="public-navigation" onClick={() => setMenuOpen((open) => !open)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span></button><div className="site-menu" id="public-navigation" hidden={!menuOpen}><Link to="/" onClick={closeMenu}>Home</Link><Link to="/explore" onClick={closeMenu}>Explore</Link><Link to="/#portals" onClick={closeMenu}>Portals</Link><Link to="/admissions" onClick={closeMenu}>Admissions</Link><div className="nav-actions">{user ? <><Link to={homeFor(user)} onClick={closeMenu}>Open portal</Link><button onClick={() => { closeMenu(); onLogout(); }}>Sign out</button></> : <Link to="/login" onClick={closeMenu}>Sign in</Link>}</div></div></nav><Outlet /></main>;
 }
@@ -123,7 +96,38 @@ function AdminOverview() {
 function DashboardPage({ kind }: { kind: 'student' | 'staff' | 'admin' | 'bursar' | 'registrar' }) { const copy = { student: ['Your school day, in one place.', 'Review your records, assignments, tests, and fees.'], staff: ['Keep the school moving forward.', 'Manage attendance, learning, grades, and assessments.'], bursar: ['Finance office workspace.', 'Manage school fees, invoices, and payment records.'], registrar: ['School records workspace.', 'Maintain student, staff, class, and academic records.'], admin: ['The school at a glance.', 'Manage people, operations, finance, content, and reports.'] }[kind]; const modules = { student: [['Academic records', '/student/records', 'REVIEW', 'See your grades and attendance.'], ['Assignments', '/student/assignments', 'LEARNING', 'View work and submission status.'], ['CBT', '/student/cbt', 'ASSESSMENTS', 'Open tests and assessment history.'], ['Fees', '/student/fees', 'ACCOUNT', 'Review school fees and payments.']], staff: [['Attendance', '/staff/attendance', 'CLASSROOM', 'Open class registers and attendance.'], ['Assignments', '/staff/assignments', 'LEARNING', 'Manage learning tasks and submissions.'], ['Grades', '/staff/grades', 'RECORDS', 'Enter and review student grades.'], ['CBT', '/staff/cbt', 'ASSESSMENTS', 'Manage computer-based tests.']], bursar: [['Fee structures', '/bursar/fees', 'FINANCE', 'Configure approved school fees.'], ['Invoices', '/bursar/invoices', 'ACCOUNTS', 'Create and review student invoices.'], ['Payments', '/bursar/payments', 'RECONCILIATION', 'Review receipts and payment status.']], registrar: [['Students', '/registrar/students', 'ENROLMENT', 'Maintain student records.'], ['Staff', '/registrar/staff', 'PEOPLE', 'Maintain staff profiles.'], ['Classes', '/registrar/classes', 'ACADEMICS', 'Review classes and assignments.'], ['Academic records', '/registrar/records', 'RECORDS', 'Manage school academic records.']], admin: [['Users & roles', '/admin/users', 'PEOPLE', 'Manage accounts and access.'], ['Academics', '/admin/academics', 'LEARNING', 'Open classes, subjects, and school years.'], ['Finance', '/admin/finance', 'OPERATIONS', 'Review fees and payment records.'], ['Reports', '/admin/reports', 'INSIGHTS', 'Open school reporting tools.']] }[kind]; return <div className="dashboard-grid"><article className="dashboard-lead"><small>OVERVIEW</small><h2>{copy[0]}</h2><p>{copy[1]}</p></article>{kind === 'admin' && <div className="dashboard-wide"><AdminOverview /></div>}{modules.map(([label, path, category, description]) => <Link className="dashboard-tile" key={path} to={path}><small>{category}</small><h3>{label}</h3><p>{description}</p><span className="tile-arrow" aria-hidden="true">→</span></Link>)}</div>; }
 function PlaceholderPage() { const location = useLocation(); const segments = location.pathname.split('/').filter(Boolean); const title = segments[segments.length - 1]?.replace(/-/g, ' ') ?? 'Workspace'; return <div className="empty-state"><small>WORKSPACE</small><h2>{title.replace(/\b\w/g, (letter) => letter.toUpperCase())}</h2><p className="muted">This module is connected to your role. Live records and actions will appear here as the module is configured.</p></div>; }
 
-export function App() { const [user, setUser] = useState<SessionUser | null>(null); useEffect(() => { if (localStorage.getItem('sapienza.token')) {
+export function App() {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [settings, setSettings] = useState<SchoolSettings>({
+    themePreset: 'wine-and-beige',
+    schoolName: 'SAPIENZA',
+    tagline: 'Catholic School',
+    palette: {
+      primary: '#4F1D2F',
+      secondary: '#F4E9D8',
+      accent: '#B77A59',
+      background: '#F8F4EE',
+      text: '#1F2937',
+      muted: '#5F6C6D'
+    }
+  });
+
+  useEffect(() => {
+    currentSchoolSettings().then(({ settings: nextSettings }) => setSettings(nextSettings)).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.schoolTheme = settings.themePreset;
+    root.style.setProperty('--color-primary', settings.palette.primary);
+    root.style.setProperty('--color-secondary', settings.palette.secondary);
+    root.style.setProperty('--color-accent', settings.palette.accent);
+    root.style.setProperty('--color-background', settings.palette.background);
+    root.style.setProperty('--color-text', settings.palette.text);
+    root.style.setProperty('--color-muted', settings.palette.muted);
+  }, [settings]);
+
+  useEffect(() => { if (localStorage.getItem('sapienza.token')) {
       currentUser().then(({ user: nextUser }) => setUser(nextUser)).catch(() => {
         localStorage.removeItem('sapienza.token');
         setUser(null);
@@ -132,7 +136,7 @@ export function App() { const [user, setUser] = useState<SessionUser | null>(nul
   }, []);
 
   return <Routes>
-    <Route element={<PublicLayout user={user} onLogout={() => { localStorage.removeItem('sapienza.token'); setUser(null); }} />}>
+    <Route element={<PublicLayout user={user} settings={settings} onLogout={() => { localStorage.removeItem('sapienza.token'); setUser(null); }} />}>
       <Route path="/" element={<Landing user={user} />} />
       <Route path="/explore" element={<ExploreDirectory />} />
       <Route path="/explore/:slug" element={<ExplorePage />} />
@@ -141,13 +145,14 @@ export function App() { const [user, setUser] = useState<SessionUser | null>(nul
       <Route path="/register" element={<Navigate to="/login" replace />} />
     </Route>
     <Route element={<PermissionRoute user={user} permission="content:manage" />}>
-      <Route path="/content-management" element={<ContentManagement user={user!} />} />
+      <Route path="/content-management" element={<ContentManagement user={user!} settings={settings} onSettingsChange={setSettings} />} />
     </Route>
     <Route element={<PermissionRoute user={user} permission="academics:manage" />}>
       <Route path="/academic-setup" element={<AcademicSetupPage />} />
     </Route>
     <Route element={<ProtectedRoute user={user} roles={['student']} />}>
       <Route path="/student" element={<DashboardPage kind="student" />} />
+      <Route path="/student/assignments" element={<AssignmentsWorkspace isStudent />} />
       <Route path="/student/records" element={<StudentResultsPage />} />
       <Route path="/student/fees" element={<StudentFeesPage />} />
       <Route path="/student/cbt" element={<CbtWorkspace user={user!} />} />
@@ -155,6 +160,9 @@ export function App() { const [user, setUser] = useState<SessionUser | null>(nul
     </Route>
     <Route element={<ProtectedRoute user={user} roles={['teacher']} />}>
       <Route path="/staff" element={<DashboardPage kind="staff" />} />
+      <Route path="/staff/attendance" element={<AttendanceWorkspace />} />
+      <Route path="/staff/assignments" element={<AssignmentsWorkspace isStudent={false} />} />
+      <Route path="/staff/grades" element={<GradesWorkspace />} />
       <Route path="/staff/students" element={<StudentEnrollmentPage />} />
       <Route path="/staff/cbt" element={<CbtWorkspace user={user!} />} />
       <Route path="/staff/*" element={<PlaceholderPage />} />
@@ -183,6 +191,7 @@ export function App() { const [user, setUser] = useState<SessionUser | null>(nul
       <Route path="/admin/finance/fees" element={<BursarFinancePage view="fees" />} />
       <Route path="/admin/finance/invoices" element={<BursarFinancePage view="invoices" />} />
       <Route path="/admin/finance/payments" element={<BursarFinancePage view="payments" />} />
+      <Route path="/admin/reports" element={<ReportsWorkspace />} />
       <Route path="/admin/*" element={<PlaceholderPage />} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />

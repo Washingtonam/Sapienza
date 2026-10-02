@@ -1,0 +1,147 @@
+:root {
+  --color-primary: #4F1D2F;
+  --color-secondary: #F4E9D8;
+  --color-accent: #B77A59;
+  --color-background: #F8F4EE;
+  --color-text: #1F2937;
+  --color-muted: #5F6C6D;
+  --color-surface: var(--color-secondary);
+  --color-line: color-mix(in srgb, var(--color-muted) 28%, var(--color-background));
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .page-shell {
+  background: linear-gradient(135deg, var(--color-background), var(--color-secondary));
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .brand,
+:root[data-school-theme] .hero h1,
+:root[data-school-theme] .portal-strip h2,
+:root[data-school-theme] .welcome h2,
+:root[data-school-theme] .intro,
+:root[data-school-theme] .portal-links a,
+:root[data-school-theme] .portal-links button {
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .hero h1 em,
+:root[data-school-theme] .text-button span,
+:root[data-school-theme] .portal-links span {
+  color: var(--color-accent);
+}
+
+:root[data-school-theme] .primary,
+:root[data-school-theme] .site-nav .nav-toggle {
+  background: var(--color-primary);
+  color: var(--color-secondary);
+}
+
+:root[data-school-theme] .text-button,
+:root[data-school-theme] .portal-links a,
+:root[data-school-theme] .portal-links button {
+  border-color: var(--color-muted);
+}
+
+:root[data-school-theme] .portal-shell {
+  background: var(--color-background);
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .portal-shell aside {
+  background: var(--color-primary);
+  color: var(--color-secondary);
+}
+
+:root[data-school-theme] .portal-shell aside .brand,
+:root[data-school-theme] .portal-shell .signout,
+:root[data-school-theme] .portal-shell .menu-toggle {
+  color: var(--color-secondary);
+}
+
+:root[data-school-theme] .portal-shell .side-links a {
+  color: var(--color-secondary);
+}
+
+:root[data-school-theme] .portal-shell .side-links a:hover,
+:root[data-school-theme] .portal-shell .side-links a.active {
+  background: color-mix(in srgb, var(--color-secondary) 14%, var(--color-primary));
+  border-left-color: var(--color-accent);
+}
+
+:root[data-school-theme] .portal-shell .side-links span,
+:root[data-school-theme] .portal-shell .tile-arrow {
+  color: var(--color-accent);
+}
+
+:root[data-school-theme] .portal-content header,
+:root[data-school-theme] .overview-metrics,
+:root[data-school-theme] .overview-attendance {
+  border-color: var(--color-line);
+}
+
+:root[data-school-theme] .dashboard-tile,
+:root[data-school-theme] .dashboard-grid article {
+  background: var(--color-surface);
+  border-color: var(--color-line);
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .dashboard-grid .dashboard-lead,
+:root[data-school-theme] .dashboard-tile:hover,
+:root[data-school-theme] .dashboard-tile:focus-visible {
+  background: color-mix(in srgb, var(--color-secondary) 72%, var(--color-background));
+}
+
+:root[data-school-theme] .portal-shell .dashboard-grid h2,
+:root[data-school-theme] .portal-shell .dashboard-grid h3,
+:root[data-school-theme] .overview-metrics strong,
+:root[data-school-theme] .portal-shell .dashboard-grid p,
+:root[data-school-theme] .overview-metrics span,
+:root[data-school-theme] .overview-attendance dt {
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .content-manager-heading,
+:root[data-school-theme] .managed-list-title,
+:root[data-school-theme] .editor-section-heading,
+:root[data-school-theme] .content-manager-tabs,
+:root[data-school-theme] .managed-media-list > small {
+  border-color: var(--color-line);
+}
+
+:root[data-school-theme] .branding-editor,
+:root[data-school-theme] .notice-editor,
+:root[data-school-theme] .editable-section,
+:root[data-school-theme] .managed-list-item,
+:root[data-school-theme] .template-action,
+:root[data-school-theme] .notice-item,
+:root[data-school-theme] .managed-media-item,
+:root[data-school-theme] .theme-preset {
+  background: var(--color-surface);
+  border-color: var(--color-line);
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .content-manager input,
+:root[data-school-theme] .content-manager select,
+:root[data-school-theme] .content-manager textarea {
+  background: var(--color-background);
+  border-color: var(--color-line);
+  color: var(--color-text);
+}
+
+:root[data-school-theme] .theme-preset.active,
+:root[data-school-theme] .managed-list-item.selected,
+:root[data-school-theme] .dashboard-tile:hover {
+  border-color: var(--color-accent);
+}
+
+:root[data-school-theme] .save-content {
+  background: var(--color-primary);
+  color: var(--color-secondary);
+}
