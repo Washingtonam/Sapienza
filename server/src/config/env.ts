@@ -6,7 +6,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   MONGODB_URI: z.string().min(1),
   JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
   PAYMENT_WEBHOOK_SECRET: z.string().min(32),
   PAYSTACK_SECRET_KEY: z.string().optional(),

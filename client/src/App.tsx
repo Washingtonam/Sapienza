@@ -52,8 +52,8 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (user: SessionUser) =>
   return <div className="auth-page"><form className="login-panel" onSubmit={submit}><small>SCHOOL PORTAL</small><h2>Sign in to continue.</h2><label>Email or student login code<input type="text" autoComplete="username" value={identifier} onChange={(event) => setIdentifier(event.target.value)} required /></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <p className="form-error">{error}</p>}<button className="primary" disabled={loading}>{loading ? 'Please wait...' : 'Sign in'}</button></form></div>;
 }
 
-function ProtectedRoute({ user, roles, schoolLogo }: { user: SessionUser | null; roles?: string[]; schoolLogo: SchoolLogo | null }) { if (!user) return <Navigate to="/login" replace />; if (roles && !roles.some((role) => roleNames(user).includes(role))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} schoolLogo={schoolLogo} />; }
-function PermissionRoute({ user, permission, schoolLogo }: { user: SessionUser | null; permission: string; schoolLogo: SchoolLogo | null }) { if (!user) return <Navigate to="/login" replace />; if (!user.roles?.some((role) => role.permissions.includes(permission))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} schoolLogo={schoolLogo} />; }
+function ProtectedRoute({ user, roles, schoolLogo, authReady }: { user: SessionUser | null; roles?: string[]; schoolLogo: SchoolLogo | null; authReady: boolean }) { if (!authReady) return <p className="auth-restoring" role="status">Restoring your session...</p>; if (!user) return <Navigate to="/login" replace />; if (roles && !roles.some((role) => roleNames(user).includes(role))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} schoolLogo={schoolLogo} />; }
+function PermissionRoute({ user, permission, schoolLogo, authReady }: { user: SessionUser | null; permission: string; schoolLogo: SchoolLogo | null; authReady: boolean }) { if (!authReady) return <p className="auth-restoring" role="status">Restoring your session...</p>; if (!user) return <Navigate to="/login" replace />; if (!user.roles?.some((role) => role.permissions.includes(permission))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} schoolLogo={schoolLogo} />; }
 function AuthenticatedLayout({ user, schoolLogo }: { user: SessionUser; schoolLogo: SchoolLogo | null }) { const navigate = useNavigate(); const location = useLocation(); const [menuOpen, setMenuOpen] = useState(true); const roles = roleNames(user); const admin = roles.includes('admin') || roles.includes('super_admin'); const bursar = roles.includes('bursar'); const registrar = roles.includes('registrar'); const staff = roles.some((role) => ['teacher', 'bursar', 'registrar', 'admin', 'super_admin'].includes(role)); const permissions = user.roles?.flatMap((role) => role.permissions) ?? [];
   const canManageSchoolContent = permissions.includes('content:manage') || permissions.includes('media:manage');
   const canManageAcademics = permissions.includes('academics:manage');
@@ -98,6 +98,7 @@ function PlaceholderPage() { const location = useLocation(); const segments = lo
 
 export function App() {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [schoolLogo, setSchoolLogo] = useState<SchoolLogo | null>(null);
   const [settings, setSettings] = useState<SchoolSettings>({
     themePreset: 'wine-and-beige',
@@ -119,6 +120,19 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!schoolLogo) return;
+    let favicon = document.querySelector<HTMLLinkElement>('link#school-favicon');
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.id = 'school-favicon';
+      favicon.rel = 'icon';
+      favicon.sizes = 'any';
+      document.head.append(favicon);
+    }
+    favicon.href = schoolLogo.url;
+  }, [schoolLogo]);
+
+  useEffect(() => {
     const root = document.documentElement;
     root.dataset.schoolTheme = settings.themePreset;
     root.style.setProperty('--color-primary', settings.palette.primary);
@@ -129,12 +143,23 @@ export function App() {
     root.style.setProperty('--color-muted', settings.palette.muted);
   }, [settings]);
 
-  useEffect(() => { if (localStorage.getItem('sapienza.token')) {
-      currentUser().then(({ user: nextUser }) => setUser(nextUser)).catch(() => {
-        localStorage.removeItem('sapienza.token');
-        setUser(null);
-      });
+  useEffect(() => {
+    let active = true;
+    const token = localStorage.getItem('sapienza.token');
+    if (!token) {
+      setAuthReady(true);
+      return () => { active = false; };
     }
+    currentUser().then(({ user: nextUser }) => {
+      if (active) setUser(nextUser);
+    }).catch(() => {
+      if (!active) return;
+      localStorage.removeItem('sapienza.token');
+      setUser(null);
+    }).finally(() => {
+      if (active) setAuthReady(true);
+    });
+    return () => { active = false; };
   }, []);
 
   return <Routes>
@@ -146,13 +171,13 @@ export function App() {
       <Route path="/login" element={<AuthPage onAuthenticated={setUser} />} />
       <Route path="/register" element={<Navigate to="/login" replace />} />
     </Route>
-    <Route element={<PermissionRoute user={user} permission="content:manage" schoolLogo={schoolLogo} />}>
+    <Route element={<PermissionRoute user={user} permission="content:manage" schoolLogo={schoolLogo} authReady={authReady} />}>
       <Route path="/content-management" element={<ContentManagement user={user!} settings={settings} onSettingsChange={setSettings} schoolLogo={schoolLogo} onLogoChange={setSchoolLogo} />} />
     </Route>
-    <Route element={<PermissionRoute user={user} permission="academics:manage" schoolLogo={schoolLogo} />}>
+    <Route element={<PermissionRoute user={user} permission="academics:manage" schoolLogo={schoolLogo} authReady={authReady} />}>
       <Route path="/academic-setup" element={<AcademicSetupPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['student']} schoolLogo={schoolLogo} />}>
+    <Route element={<ProtectedRoute user={user} roles={['student']} schoolLogo={schoolLogo} authReady={authReady} />}>
       <Route path="/student" element={<DashboardPage kind="student" />} />
       <Route path="/student/assignments" element={<AssignmentsWorkspace isStudent />} />
       <Route path="/student/records" element={<StudentResultsPage />} />
@@ -160,7 +185,7 @@ export function App() {
       <Route path="/student/cbt" element={<CbtWorkspace user={user!} />} />
       <Route path="/student/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['teacher']} schoolLogo={schoolLogo} />}>
+    <Route element={<ProtectedRoute user={user} roles={['teacher']} schoolLogo={schoolLogo} authReady={authReady} />}>
       <Route path="/staff" element={<DashboardPage kind="staff" />} />
       <Route path="/staff/attendance" element={<AttendanceWorkspace />} />
       <Route path="/staff/assignments" element={<AssignmentsWorkspace isStudent={false} />} />
@@ -169,14 +194,14 @@ export function App() {
       <Route path="/staff/cbt" element={<CbtWorkspace user={user!} />} />
       <Route path="/staff/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['bursar']} schoolLogo={schoolLogo} />}>
+    <Route element={<ProtectedRoute user={user} roles={['bursar']} schoolLogo={schoolLogo} authReady={authReady} />}>
       <Route path="/bursar" element={<DashboardPage kind="bursar" />} />
       <Route path="/bursar/fees" element={<BursarFinancePage view="fees" />} />
       <Route path="/bursar/invoices" element={<BursarFinancePage view="invoices" />} />
       <Route path="/bursar/payments" element={<BursarFinancePage view="payments" />} />
       <Route path="/bursar/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['registrar']} schoolLogo={schoolLogo} />}>
+    <Route element={<ProtectedRoute user={user} roles={['registrar']} schoolLogo={schoolLogo} authReady={authReady} />}>
       <Route path="/registrar" element={<DashboardPage kind="registrar" />} />
       <Route path="/registrar/students" element={<StudentEnrollmentPage />} />
       <Route path="/registrar/staff" element={<RegistrarStaffPage />} />
@@ -184,7 +209,7 @@ export function App() {
       <Route path="/registrar/records" element={<RegistrarRecordsPage />} />
       <Route path="/registrar/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['admin', 'super_admin']} schoolLogo={schoolLogo} />}>
+    <Route element={<ProtectedRoute user={user} roles={['admin', 'super_admin']} schoolLogo={schoolLogo} authReady={authReady} />}>
       <Route path="/admin" element={<DashboardPage kind="admin" />} />
       <Route path="/admin/users" element={<UserRoleManagement />} />
       <Route path="/admin/students" element={<StudentEnrollmentPage />} />

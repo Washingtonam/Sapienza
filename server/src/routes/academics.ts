@@ -22,7 +22,8 @@ router.use(authenticate);
 const schoolYearInput = z.object({ name: z.string().min(1), startsAt: z.coerce.date(), endsAt: z.coerce.date(), status: z.enum(['planned', 'active', 'closed']).optional() });
 const termInput = z.object({ name: z.string().min(1), schoolYearId: z.string(), order: z.number().int().min(1).max(3), startsAt: z.coerce.date().optional(), endsAt: z.coerce.date().optional() });
 const subjectInput = z.object({ name: z.string().min(1), code: z.string().min(1), description: z.string().optional() });
-const classInput = z.object({ name: z.string().min(1), level: z.string().min(1), schoolYearId: z.string(), classTeacherId: z.string().optional() });
+const objectIdInput = z.string().regex(/^[\da-f]{24}$/i, 'Invalid ID');
+const classInput = z.object({ name: z.string().trim().min(1), level: z.string().trim().min(1), schoolYearId: objectIdInput, classTeacherId: objectIdInput.optional() });
 const classTeacherInput = z.object({ classTeacherId: z.string().nullable() });
 const studentInput = z.object({ userId: z.string(), admissionNumber: z.string().min(1), dateOfBirth: z.coerce.date().optional(), gender: z.enum(['female', 'male', 'other', 'undisclosed']).optional(), address: z.string().optional(), classId: z.string().optional(), admissionDate: z.coerce.date() });
 const enrollmentInput = z.object({ firstName: z.string().trim().min(1), lastName: z.string().trim().min(1), password: z.string().min(8), dateOfBirth: z.coerce.date().optional(), gender: z.enum(['female', 'male', 'other', 'undisclosed']).optional(), address: z.string().trim().optional(), admissionDate: z.coerce.date(), schoolYearId: z.string(), termId: z.string(), classId: z.string() });
@@ -101,11 +102,21 @@ router.get('/teachers', requirePermission('academics:read'), async (_request, re
 router.post('/classes', requirePermission('academics:manage'), async (request: AuthenticatedRequest, response, next) => {
   try {
     const input = classInput.parse(request.body);
+    const schoolYear = await SchoolYear.exists({ _id: input.schoolYearId });
+    if (!schoolYear) { response.status(404).json({ error: 'School year not found' }); return; }
+    const duplicate = await SchoolClass.exists({ name: input.name, schoolYearId: input.schoolYearId });
+    if (duplicate) { response.status(409).json({ error: 'A class with this name already exists for this school year' }); return; }
     if (input.classTeacherId && !await findActiveTeacherStaff(input.classTeacherId)) { response.status(400).json({ error: 'Select an active teacher account' }); return; }
     const schoolClass = await SchoolClass.create(input);
     await writeAuditLog({ request, actorId: request.user!.id, action: 'class.created', entityType: 'Class', entityId: schoolClass.id, after: input });
     response.status(201).json({ class: schoolClass });
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+      response.status(409).json({ error: 'A class with this name already exists for this school year' });
+      return;
+    }
+    next(error);
+  }
 });
 
 router.patch('/classes/:id/teacher', requirePermission('academics:manage'), async (request: AuthenticatedRequest, response, next) => {
