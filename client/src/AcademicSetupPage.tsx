@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { assignClassTeacher, createSchoolClass, createSchoolTerm, createSchoolYear, schoolClasses, schoolTeachers, schoolTerms, schoolYears, type SchoolClass, type SchoolTerm, type SchoolYear, type TeacherStaff } from './api';
+import { assignClassTeacher, createSchoolClass, createSchoolTerm, createSchoolYear, deleteSchoolClass, deleteSchoolTerm, deleteSchoolYear, schoolClasses, schoolTeachers, schoolTerms, schoolYears, updateSchoolClass, updateSchoolTerm, updateSchoolYear, type SchoolClass, type SchoolTerm, type SchoolYear, type TeacherStaff } from './api';
 import './class-assignment.css';
 
 export function AcademicSetupPage() {
@@ -20,6 +20,20 @@ export function AcademicSetupPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [editingYearId, setEditingYearId] = useState('');
+  const [editingYearName, setEditingYearName] = useState('');
+  const [editingYearStart, setEditingYearStart] = useState('');
+  const [editingYearEnd, setEditingYearEnd] = useState('');
+  const [editingYearStatus, setEditingYearStatus] = useState<SchoolYear['status']>('planned');
+  const [editingTermId, setEditingTermId] = useState('');
+  const [editingTermName, setEditingTermName] = useState('');
+  const [editingTermOrder, setEditingTermOrder] = useState(1);
+  const [editingTermStart, setEditingTermStart] = useState('');
+  const [editingTermEnd, setEditingTermEnd] = useState('');
+  const [editingClassId, setEditingClassId] = useState('');
+  const [editingClassName, setEditingClassName] = useState('');
+  const [editingClassLevel, setEditingClassLevel] = useState('');
+  const [editingClassTeacher, setEditingClassTeacher] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -56,6 +70,16 @@ export function AcademicSetupPage() {
 
   const yearLabel = (id: string) => years.find((year) => year._id === id)?.name ?? 'School year';
   const dateValue = (date?: string) => date ? new Date(date).toLocaleDateString() : '';
+  const dateInputValue = (date?: string) => date ? new Date(date).toISOString().slice(0, 10) : '';
+
+  async function removeRecord(action: () => Promise<unknown>) {
+    if (!window.confirm('Delete this academic record? Linked records cannot be deleted.')) return;
+    setBusy(true);
+    setError('');
+    try { await action(); setReloadKey((key) => key + 1); }
+    catch (deleteError) { setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete academic record'); }
+    finally { setBusy(false); }
+  }
 
   return <section className="academic-setup">
     <p className="muted">Configure the school calendar structure used by classes and results.</p>
@@ -73,7 +97,15 @@ export function AcademicSetupPage() {
           <div className="academic-date-fields"><label>Starts<input type="date" value={yearStart} onChange={(event) => setYearStart(event.target.value)} required /></label><label>Ends<input type="date" value={yearEnd} onChange={(event) => setYearEnd(event.target.value)} required /></label></div>
           <button className="primary" disabled={busy}>{busy ? 'Saving...' : 'Add school year'}</button>
         </form>
-        <ul className="academic-record-list">{years.map((year) => <li key={year._id}><span><strong>{year.name}</strong><small>{dateValue(year.startsAt)} – {dateValue(year.endsAt)}</small></span><small>{year.status}</small></li>)}</ul>
+        <ul className="academic-record-list">{years.map((year) => <li key={year._id}>
+          {editingYearId === year._id ? <form className="academic-edit-form" onSubmit={(event) => submit(event, async () => { await updateSchoolYear(year._id, { name: editingYearName, startsAt: editingYearStart, endsAt: editingYearEnd, status: editingYearStatus }); setEditingYearId(''); })}>
+            <label>Session name<input value={editingYearName} onChange={(event) => setEditingYearName(event.target.value)} required /></label>
+            <label>Starts<input type="date" value={editingYearStart} onChange={(event) => setEditingYearStart(event.target.value)} required /></label>
+            <label>Ends<input type="date" value={editingYearEnd} onChange={(event) => setEditingYearEnd(event.target.value)} required /></label>
+            <label>Status<select value={editingYearStatus} onChange={(event) => setEditingYearStatus(event.target.value as SchoolYear['status'])}><option value="planned">Planned</option><option value="active">Active</option><option value="closed">Closed</option></select></label>
+            <div className="academic-record-actions"><button type="submit" disabled={busy}>Save</button><button type="button" onClick={() => setEditingYearId('')}>Cancel</button></div>
+          </form> : <><span><strong>{year.name}</strong><small>{dateValue(year.startsAt)} – {dateValue(year.endsAt)}</small></span><div className="academic-record-actions"><small>{year.status}</small><button type="button" onClick={() => { setEditingYearId(year._id); setEditingYearName(year.name); setEditingYearStart(dateInputValue(year.startsAt)); setEditingYearEnd(dateInputValue(year.endsAt)); setEditingYearStatus(year.status); }}>Edit</button><button type="button" className="danger" disabled={busy} onClick={() => void removeRecord(() => deleteSchoolYear(year._id))}>Delete</button></div></>}
+        </li>)}</ul>
       </section>
 
       <section className="academic-panel">
@@ -89,7 +121,15 @@ export function AcademicSetupPage() {
           <div className="academic-date-fields"><label>Starts<input type="date" value={termStart} onChange={(event) => setTermStart(event.target.value)} /></label><label>Ends<input type="date" value={termEnd} onChange={(event) => setTermEnd(event.target.value)} /></label></div>
           <button className="primary" disabled={busy || !selectedYear}>{busy ? 'Saving...' : 'Add term'}</button>
         </form>
-        <ul className="academic-record-list">{selectedYearTerms.map((term) => <li key={term._id}><span><strong>{term.name}</strong><small>{[dateValue(term.startsAt), dateValue(term.endsAt)].filter(Boolean).join(' – ') || 'Dates not set'}</small></span><small>TERM {term.order}</small></li>)}</ul>
+        <ul className="academic-record-list">{selectedYearTerms.map((term) => <li key={term._id}>
+          {editingTermId === term._id ? <form className="academic-edit-form" onSubmit={(event) => submit(event, async () => { await updateSchoolTerm(term._id, { name: editingTermName, order: editingTermOrder, startsAt: editingTermStart || null, endsAt: editingTermEnd || null }); setEditingTermId(''); })}>
+            <label>Term name<input value={editingTermName} onChange={(event) => setEditingTermName(event.target.value)} required /></label>
+            <label>Order<select value={editingTermOrder} onChange={(event) => setEditingTermOrder(Number(event.target.value))}>{[1, 2, 3].map((order) => <option key={order} value={order}>{order}</option>)}</select></label>
+            <label>Starts<input type="date" value={editingTermStart} onChange={(event) => setEditingTermStart(event.target.value)} /></label>
+            <label>Ends<input type="date" value={editingTermEnd} onChange={(event) => setEditingTermEnd(event.target.value)} /></label>
+            <div className="academic-record-actions"><button type="submit" disabled={busy}>Save</button><button type="button" onClick={() => setEditingTermId('')}>Cancel</button></div>
+          </form> : <><span><strong>{term.name}</strong><small>{[dateValue(term.startsAt), dateValue(term.endsAt)].filter(Boolean).join(' – ') || 'Dates not set'}</small></span><div className="academic-record-actions"><small>TERM {term.order}</small><button type="button" onClick={() => { setEditingTermId(term._id); setEditingTermName(term.name); setEditingTermOrder(term.order); setEditingTermStart(dateInputValue(term.startsAt)); setEditingTermEnd(dateInputValue(term.endsAt)); }}>Edit</button><button type="button" className="danger" disabled={busy} onClick={() => void removeRecord(() => deleteSchoolTerm(term._id))}>Delete</button></div></>}
+        </li>)}</ul>
       </section>
 
       <section className="academic-panel academic-panel-wide">
@@ -107,7 +147,14 @@ export function AcademicSetupPage() {
         </form>
         <ul className="academic-record-list academic-class-list">{selectedYearClasses.map((schoolClass) => {
           const currentTeacherId = typeof schoolClass.classTeacherId === 'string' ? schoolClass.classTeacherId : schoolClass.classTeacherId?._id ?? '';
-          return <li key={schoolClass._id}><span><strong>{schoolClass.name}</strong><small>{schoolClass.level} · {yearLabel(schoolClass.schoolYearId)}</small></span><label className="class-teacher-picker"><span>Class teacher</span><select value={currentTeacherId} onChange={(event) => void changeClassTeacher(schoolClass, event.target.value)} disabled={busy}><option value="">Unassigned</option>{teachers.map((teacher) => <option key={teacher._id} value={teacher._id}>{teacher.userId.firstName} {teacher.userId.lastName}</option>)}</select></label></li>;
+          return <li key={schoolClass._id}>
+            {editingClassId === schoolClass._id ? <form className="academic-edit-form" onSubmit={(event) => submit(event, async () => { await updateSchoolClass(schoolClass._id, { name: editingClassName, level: editingClassLevel, classTeacherId: editingClassTeacher || null }); setEditingClassId(''); })}>
+              <label>Class name<input value={editingClassName} onChange={(event) => setEditingClassName(event.target.value)} required /></label>
+              <label>Level<input value={editingClassLevel} onChange={(event) => setEditingClassLevel(event.target.value)} required /></label>
+              <label>Class teacher<select value={editingClassTeacher} onChange={(event) => setEditingClassTeacher(event.target.value)}><option value="">Unassigned</option>{teachers.map((teacher) => <option key={teacher._id} value={teacher._id}>{teacher.userId.firstName} {teacher.userId.lastName}</option>)}</select></label>
+              <div className="academic-record-actions"><button type="submit" disabled={busy}>Save</button><button type="button" onClick={() => setEditingClassId('')}>Cancel</button></div>
+            </form> : <><span><strong>{schoolClass.name}</strong><small>{schoolClass.level} · {yearLabel(schoolClass.schoolYearId)}</small></span><label className="class-teacher-picker"><span>Class teacher</span><select value={currentTeacherId} onChange={(event) => void changeClassTeacher(schoolClass, event.target.value)} disabled={busy}><option value="">Unassigned</option>{teachers.map((teacher) => <option key={teacher._id} value={teacher._id}>{teacher.userId.firstName} {teacher.userId.lastName}</option>)}</select></label><div className="academic-record-actions"><button type="button" onClick={() => { setEditingClassId(schoolClass._id); setEditingClassName(schoolClass.name); setEditingClassLevel(schoolClass.level); setEditingClassTeacher(currentTeacherId); }}>Edit</button><button type="button" className="danger" disabled={busy} onClick={() => void removeRecord(() => deleteSchoolClass(schoolClass._id))}>Delete</button></div></>}
+          </li>;
         })}</ul>
       </section>
     </div>

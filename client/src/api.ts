@@ -77,7 +77,7 @@ export type StaffRecord = { _id: string; employeeNumber: string; department?: st
 export type SchoolStudent = { _id: string; admissionNumber: string; userId: { firstName: string; lastName: string; email?: string }; classId?: { _id: string; name: string; level: string } };
 export type ManagedReportCard = { _id: string; studentId: SchoolStudent; schoolYearId: { _id: string; name: string }; term: string; subjects: Array<{ subjectName: string; average: number; grade: string }>; average: number; position?: number; teacherComment?: string; principalComment?: string; publishedAt?: string };
 export type EnrollmentClass = { _id: string; name: string; level: string; schoolYearId: { _id: string; name: string; status: SchoolYear['status'] } };
-export type ClassEnrollment = { _id: string; studentId: { _id: string; admissionNumber: string; userId: { firstName: string; lastName: string; loginCode: string } }; termId: string };
+export type ClassEnrollment = { _id: string; studentId: { _id: string; admissionNumber: string; userId: { firstName: string; middleName?: string; lastName: string; loginCode: string } }; termId: string };
 export type FinanceClass = { _id: string; name: string; level: string; schoolYearId: { _id: string; name: string; status: SchoolYear['status'] } };
 export type FinanceStudent = { _id: string; admissionNumber: string; userId: { firstName: string; lastName: string }; classId?: { _id: string; name: string; level: string } };
 export type FeeStructureRecord = { _id: string; name: string; schoolYearId: { _id: string; name: string; status: SchoolYear['status'] }; classId: { _id: string; name: string; level: string }; items: Array<{ name: string; amount: number }>; totalAmount: number; dueDate: string };
@@ -183,12 +183,16 @@ export function classEnrollments(classId: string, schoolYearId: string) {
   return request<{ enrollments: ClassEnrollment[] }>(`/academics/enrollments?${query}`);
 }
 
-export function enrollStudent(input: { firstName: string; lastName: string; password: string; admissionDate: string; schoolYearId: string; termId: string; classId: string; dateOfBirth?: string; gender?: 'female' | 'male' | 'other' | 'undisclosed'; address?: string }) {
+export function enrollStudent(input: { firstName: string; middleName?: string; lastName: string; password: string; admissionDate: string; schoolYearId: string; termId: string; classId: string; dateOfBirth?: string; gender?: 'female' | 'male' | 'other' | 'undisclosed'; address?: string }) {
   return request<{ student: { id: string; firstName: string; lastName: string; loginCode: string } }>('/academics/enrollments', { method: 'POST', body: JSON.stringify(input) });
 }
 
 export function reenrollStudent(input: { loginCode: string; schoolYearId: string; termId: string; classId: string }) {
   return request<{ student: { id: string; firstName: string; lastName: string; loginCode: string } }>('/academics/enrollments/returning', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateStudentPassword(studentId: string, password: string) {
+  return request<{ success: boolean }>(`/academics/students/${encodeURIComponent(studentId)}/password`, { method: 'PATCH', body: JSON.stringify({ password }) });
 }
 
 export function currentUser() {
@@ -363,12 +367,36 @@ export function createSchoolYear(input: { name: string; startsAt: string; endsAt
   return request<{ schoolYear: SchoolYear }>('/academics/school-years', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export function updateSchoolYear(id: string, input: Partial<Pick<SchoolYear, 'name' | 'startsAt' | 'endsAt' | 'status'>>) {
+  return request<{ schoolYear: SchoolYear }>(`/academics/school-years/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deleteSchoolYear(id: string) {
+  return request<{ success: boolean }>(`/academics/school-years/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export function createSchoolTerm(input: { name: string; schoolYearId: string; order: number; startsAt?: string; endsAt?: string }) {
   return request<{ term: SchoolTerm }>('/academics/terms', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export function updateSchoolTerm(id: string, input: Partial<Pick<SchoolTerm, 'name' | 'order'>> & { startsAt?: string | null; endsAt?: string | null }) {
+  return request<{ term: SchoolTerm }>(`/academics/terms/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deleteSchoolTerm(id: string) {
+  return request<{ success: boolean }>(`/academics/terms/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export function createSchoolClass(input: { name: string; level: string; schoolYearId: string; classTeacherId?: string }) {
   return request<{ class: SchoolClass }>('/academics/classes', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function updateSchoolClass(id: string, input: Partial<Pick<SchoolClass, 'name' | 'level' | 'classTeacherId'>>) {
+  return request<{ class: SchoolClass }>(`/academics/classes/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) });
+}
+
+export function deleteSchoolClass(id: string) {
+  return request<{ success: boolean }>(`/academics/classes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function assignClassTeacher(classId: string, classTeacherId: string | null) {
