@@ -150,6 +150,8 @@ export type ManagedMedia = {
   isActive: boolean;
 };
 
+export type SchoolLogo = Pick<ManagedMedia, 'url' | 'altText'>;
+
 async function request<T>(path: string, options: RequestInit = {}) {
   const token = localStorage.getItem('sapienza.token');
   const response = await fetch(`${API_URL}${path}`, {

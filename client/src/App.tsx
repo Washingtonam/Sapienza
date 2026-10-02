@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { adminDashboard, currentSchoolSettings, currentUser, login, publicContent, type AdminDashboard, type SchoolSettings, type SessionUser } from './api';
+import { adminDashboard, currentSchoolSettings, currentUser, login, publicContent, publicMedia, type AdminDashboard, type SchoolLogo, type SchoolSettings, type SessionUser } from './api';
 import { ContentManagement } from './ContentManagement';
 import { AcademicSetupPage } from './AcademicSetupPage';
 import { StudentResultsPage } from './StudentResultsPage';
@@ -25,10 +25,10 @@ function homeFor(user: SessionUser) {
   return roles.includes('teacher') ? '/staff' : '/student';
 }
 
-function PublicLayout({ user, settings, onLogout }: { user: SessionUser | null; settings: SchoolSettings; onLogout: () => void }) {
+function PublicLayout({ user, settings, schoolLogo, onLogout }: { user: SessionUser | null; settings: SchoolSettings; schoolLogo: SchoolLogo | null; onLogout: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
-  return <main className="page-shell"><nav className="site-nav"><Link className="brand" to="/" onClick={closeMenu}><strong>{settings.schoolName}</strong><span>{settings.tagline}</span></Link><button className="nav-toggle" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="public-navigation" onClick={() => setMenuOpen((open) => !open)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span></button><div className="site-menu" id="public-navigation" hidden={!menuOpen}><Link to="/" onClick={closeMenu}>Home</Link><Link to="/explore" onClick={closeMenu}>Explore</Link><Link to="/#portals" onClick={closeMenu}>Portals</Link><Link to="/admissions" onClick={closeMenu}>Admissions</Link><div className="nav-actions">{user ? <><Link to={homeFor(user)} onClick={closeMenu}>Open portal</Link><button onClick={() => { closeMenu(); onLogout(); }}>Sign out</button></> : <Link to="/login" onClick={closeMenu}>Sign in</Link>}</div></div></nav><Outlet /></main>;
+  return <main className="page-shell"><nav className="site-nav"><Link className="brand" to="/" onClick={closeMenu}>{schoolLogo && <img className="school-brand-logo" src={schoolLogo.url} alt={schoolLogo.altText} />}<span className="site-brand-copy"><strong>{settings.schoolName}</strong><span>{settings.tagline}</span></span></Link><button className="nav-toggle" type="button" aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menuOpen} aria-controls="public-navigation" onClick={() => setMenuOpen((open) => !open)}><span aria-hidden="true">{menuOpen ? '×' : '☰'}</span></button><div className="site-menu" id="public-navigation" hidden={!menuOpen}><Link to="/" onClick={closeMenu}>Home</Link><Link to="/explore" onClick={closeMenu}>Explore</Link><Link to="/#portals" onClick={closeMenu}>Portals</Link><Link to="/admissions" onClick={closeMenu}>Admissions</Link><div className="nav-actions">{user ? <><Link to={homeFor(user)} onClick={closeMenu}>Open portal</Link><button onClick={() => { closeMenu(); onLogout(); }}>Sign out</button></> : <Link to="/login" onClick={closeMenu}>Sign in</Link>}</div></div></nav><Outlet /></main>;
 }
 
 function Landing({ user }: { user: SessionUser | null }) {
@@ -52,16 +52,16 @@ function AuthPage({ onAuthenticated }: { onAuthenticated: (user: SessionUser) =>
   return <div className="auth-page"><form className="login-panel" onSubmit={submit}><small>SCHOOL PORTAL</small><h2>Sign in to continue.</h2><label>Email or student login code<input type="text" autoComplete="username" value={identifier} onChange={(event) => setIdentifier(event.target.value)} required /></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <p className="form-error">{error}</p>}<button className="primary" disabled={loading}>{loading ? 'Please wait...' : 'Sign in'}</button></form></div>;
 }
 
-function ProtectedRoute({ user, roles }: { user: SessionUser | null; roles?: string[] }) { if (!user) return <Navigate to="/login" replace />; if (roles && !roles.some((role) => roleNames(user).includes(role))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} />; }
-function PermissionRoute({ user, permission }: { user: SessionUser | null; permission: string }) { if (!user) return <Navigate to="/login" replace />; if (!user.roles?.some((role) => role.permissions.includes(permission))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} />; }
-function AuthenticatedLayout({ user }: { user: SessionUser }) { const navigate = useNavigate(); const location = useLocation(); const [menuOpen, setMenuOpen] = useState(true); const roles = roleNames(user); const admin = roles.includes('admin') || roles.includes('super_admin'); const bursar = roles.includes('bursar'); const registrar = roles.includes('registrar'); const staff = roles.some((role) => ['teacher', 'bursar', 'registrar', 'admin', 'super_admin'].includes(role)); const permissions = user.roles?.flatMap((role) => role.permissions) ?? [];
+function ProtectedRoute({ user, roles, schoolLogo }: { user: SessionUser | null; roles?: string[]; schoolLogo: SchoolLogo | null }) { if (!user) return <Navigate to="/login" replace />; if (roles && !roles.some((role) => roleNames(user).includes(role))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} schoolLogo={schoolLogo} />; }
+function PermissionRoute({ user, permission, schoolLogo }: { user: SessionUser | null; permission: string; schoolLogo: SchoolLogo | null }) { if (!user) return <Navigate to="/login" replace />; if (!user.roles?.some((role) => role.permissions.includes(permission))) return <Navigate to={homeFor(user)} replace />; return <AuthenticatedLayout user={user} schoolLogo={schoolLogo} />; }
+function AuthenticatedLayout({ user, schoolLogo }: { user: SessionUser; schoolLogo: SchoolLogo | null }) { const navigate = useNavigate(); const location = useLocation(); const [menuOpen, setMenuOpen] = useState(true); const roles = roleNames(user); const admin = roles.includes('admin') || roles.includes('super_admin'); const bursar = roles.includes('bursar'); const registrar = roles.includes('registrar'); const staff = roles.some((role) => ['teacher', 'bursar', 'registrar', 'admin', 'super_admin'].includes(role)); const permissions = user.roles?.flatMap((role) => role.permissions) ?? [];
   const canManageSchoolContent = permissions.includes('content:manage') || permissions.includes('media:manage');
   const canManageAcademics = permissions.includes('academics:manage');
   const canEnrollStudents = permissions.includes('academics:enroll');
   const links = admin ? [['Dashboard', '/admin'], ...(permissions.includes('users:manage') ? [['Users & roles', '/admin/users']] : []), ['Academics', '/admin/academics'], ['Finance', '/admin/finance'], ['Reports', '/admin/reports']] : bursar ? [['Dashboard', '/bursar'], ['Fee structures', '/bursar/fees'], ['Invoices', '/bursar/invoices'], ['Payments', '/bursar/payments']] : registrar ? [['Dashboard', '/registrar'], ['Students', '/registrar/students'], ['Staff', '/registrar/staff'], ['Classes', '/registrar/classes'], ['Academic records', '/registrar/records']] : staff ? [['Dashboard', '/staff'], ['Attendance', '/staff/attendance'], ['Assignments', '/staff/assignments'], ['Grades', '/staff/grades'], ['CBT', '/staff/cbt']] : [['Dashboard', '/student'], ['Academic records', '/student/records'], ['Assignments', '/student/assignments'], ['CBT', '/student/cbt'], ['Fees', '/student/fees']];
   const registerLink = canEnrollStudents && !registrar ? [['Student register', admin ? '/admin/students' : '/staff/students']] : [];
   const navigationLinks = [...links, ...registerLink, ...(canManageAcademics && !admin && !registrar ? [['Academic setup', '/academic-setup']] : []), ...(canManageSchoolContent ? [['Content & media', '/content-management']] : [])];
-  return <main className={`portal-shell${menuOpen ? '' : ' nav-collapsed'}`}><aside><div className="sidebar-top"><Link className="brand" to="/"><strong>SAPIENZA</strong><span>Portal</span></Link><button className="menu-toggle" type="button" aria-label={menuOpen ? 'Collapse navigation' : 'Expand navigation'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><span aria-hidden="true">☰</span></button></div><small className="portal-role">{admin ? 'ADMINISTRATION' : bursar ? 'FINANCE OFFICE' : registrar ? 'REGISTRAR OFFICE' : staff ? 'TEACHER PORTAL' : 'STUDENT PORTAL'}</small><div className="side-links">{navigationLinks.map(([label, path]) => <Link aria-label={label} title={label} className={location.pathname === path ? 'active' : ''} key={path} to={path}><span className="nav-label">{label}</span><span aria-hidden="true">→</span></Link>)}</div><button className="signout" onClick={() => { localStorage.removeItem('sapienza.token'); navigate('/'); }}>Sign out</button></aside><section className="portal-content"><header><small>{user.firstName} {user.lastName}</small><h1>{navigationLinks.find(([, path]) => path === location.pathname)?.[0] ?? 'Dashboard'}</h1></header><Outlet /></section></main>; }
+  return <main className={`portal-shell${menuOpen ? '' : ' nav-collapsed'}`}><aside><div className="sidebar-top"><Link className="brand" to="/">{schoolLogo && <img className="portal-brand-logo" src={schoolLogo.url} alt={schoolLogo.altText} />}<span className="portal-brand-copy"><strong>SAPIENZA</strong><span>Portal</span></span></Link><button className="menu-toggle" type="button" aria-label={menuOpen ? 'Collapse navigation' : 'Expand navigation'} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><span aria-hidden="true">☰</span></button></div><small className="portal-role">{admin ? 'ADMINISTRATION' : bursar ? 'FINANCE OFFICE' : registrar ? 'REGISTRAR OFFICE' : staff ? 'TEACHER PORTAL' : 'STUDENT PORTAL'}</small><div className="side-links">{navigationLinks.map(([label, path]) => <Link aria-label={label} title={label} className={location.pathname === path ? 'active' : ''} key={path} to={path}><span className="nav-label">{label}</span><span aria-hidden="true">→</span></Link>)}</div><button className="signout" onClick={() => { localStorage.removeItem('sapienza.token'); navigate('/'); }}>Sign out</button></aside><section className="portal-content"><header><small>{user.firstName} {user.lastName}</small><h1>{navigationLinks.find(([, path]) => path === location.pathname)?.[0] ?? 'Dashboard'}</h1></header><Outlet /></section></main>; }
 
 function AdminOverview() {
   const [data, setData] = useState<AdminDashboard | null>(null);
@@ -98,6 +98,7 @@ function PlaceholderPage() { const location = useLocation(); const segments = lo
 
 export function App() {
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [schoolLogo, setSchoolLogo] = useState<SchoolLogo | null>(null);
   const [settings, setSettings] = useState<SchoolSettings>({
     themePreset: 'wine-and-beige',
     schoolName: 'SAPIENZA',
@@ -114,6 +115,7 @@ export function App() {
 
   useEffect(() => {
     currentSchoolSettings().then(({ settings: nextSettings }) => setSettings(nextSettings)).catch(() => undefined);
+    publicMedia().then(({ media }) => setSchoolLogo(media.find((asset) => asset.key === 'school.logo') ?? null)).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -136,7 +138,7 @@ export function App() {
   }, []);
 
   return <Routes>
-    <Route element={<PublicLayout user={user} settings={settings} onLogout={() => { localStorage.removeItem('sapienza.token'); setUser(null); }} />}>
+    <Route element={<PublicLayout user={user} settings={settings} schoolLogo={schoolLogo} onLogout={() => { localStorage.removeItem('sapienza.token'); setUser(null); }} />}>
       <Route path="/" element={<Landing user={user} />} />
       <Route path="/explore" element={<ExploreDirectory />} />
       <Route path="/explore/:slug" element={<ExplorePage />} />
@@ -144,13 +146,13 @@ export function App() {
       <Route path="/login" element={<AuthPage onAuthenticated={setUser} />} />
       <Route path="/register" element={<Navigate to="/login" replace />} />
     </Route>
-    <Route element={<PermissionRoute user={user} permission="content:manage" />}>
-      <Route path="/content-management" element={<ContentManagement user={user!} settings={settings} onSettingsChange={setSettings} />} />
+    <Route element={<PermissionRoute user={user} permission="content:manage" schoolLogo={schoolLogo} />}>
+      <Route path="/content-management" element={<ContentManagement user={user!} settings={settings} onSettingsChange={setSettings} schoolLogo={schoolLogo} onLogoChange={setSchoolLogo} />} />
     </Route>
-    <Route element={<PermissionRoute user={user} permission="academics:manage" />}>
+    <Route element={<PermissionRoute user={user} permission="academics:manage" schoolLogo={schoolLogo} />}>
       <Route path="/academic-setup" element={<AcademicSetupPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['student']} />}>
+    <Route element={<ProtectedRoute user={user} roles={['student']} schoolLogo={schoolLogo} />}>
       <Route path="/student" element={<DashboardPage kind="student" />} />
       <Route path="/student/assignments" element={<AssignmentsWorkspace isStudent />} />
       <Route path="/student/records" element={<StudentResultsPage />} />
@@ -158,7 +160,7 @@ export function App() {
       <Route path="/student/cbt" element={<CbtWorkspace user={user!} />} />
       <Route path="/student/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['teacher']} />}>
+    <Route element={<ProtectedRoute user={user} roles={['teacher']} schoolLogo={schoolLogo} />}>
       <Route path="/staff" element={<DashboardPage kind="staff" />} />
       <Route path="/staff/attendance" element={<AttendanceWorkspace />} />
       <Route path="/staff/assignments" element={<AssignmentsWorkspace isStudent={false} />} />
@@ -167,14 +169,14 @@ export function App() {
       <Route path="/staff/cbt" element={<CbtWorkspace user={user!} />} />
       <Route path="/staff/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['bursar']} />}>
+    <Route element={<ProtectedRoute user={user} roles={['bursar']} schoolLogo={schoolLogo} />}>
       <Route path="/bursar" element={<DashboardPage kind="bursar" />} />
       <Route path="/bursar/fees" element={<BursarFinancePage view="fees" />} />
       <Route path="/bursar/invoices" element={<BursarFinancePage view="invoices" />} />
       <Route path="/bursar/payments" element={<BursarFinancePage view="payments" />} />
       <Route path="/bursar/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['registrar']} />}>
+    <Route element={<ProtectedRoute user={user} roles={['registrar']} schoolLogo={schoolLogo} />}>
       <Route path="/registrar" element={<DashboardPage kind="registrar" />} />
       <Route path="/registrar/students" element={<StudentEnrollmentPage />} />
       <Route path="/registrar/staff" element={<RegistrarStaffPage />} />
@@ -182,7 +184,7 @@ export function App() {
       <Route path="/registrar/records" element={<RegistrarRecordsPage />} />
       <Route path="/registrar/*" element={<PlaceholderPage />} />
     </Route>
-    <Route element={<ProtectedRoute user={user} roles={['admin', 'super_admin']} />}>
+    <Route element={<ProtectedRoute user={user} roles={['admin', 'super_admin']} schoolLogo={schoolLogo} />}>
       <Route path="/admin" element={<DashboardPage kind="admin" />} />
       <Route path="/admin/users" element={<UserRoleManagement />} />
       <Route path="/admin/students" element={<StudentEnrollmentPage />} />

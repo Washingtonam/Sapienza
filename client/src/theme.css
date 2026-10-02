@@ -145,3 +145,31 @@ body {
   background: var(--color-primary);
   color: var(--color-secondary);
 }
+
+.site-brand-copy,
+.portal-brand-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.school-brand-logo,
+.portal-brand-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  background: var(--color-secondary);
+  padding: 3px;
+}
+
+.portal-shell aside .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.portal-brand-logo {
+  width: 40px;
+  height: 40px;
+}

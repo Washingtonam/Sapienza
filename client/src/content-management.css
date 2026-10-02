@@ -41,6 +41,15 @@
 .branding-editor{display:grid;gap:16px;border:1px solid #d2dcd2;background:#fffdf8;padding:18px}
 .branding-header{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .branding-header h3{margin:6px 0 0;font-size:20px}
+.school-logo-editor{display:grid;gap:16px;border:1px solid #d2dcd2;background:#fffdf8;padding:18px}
+.school-logo-heading{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.school-logo-heading h3{margin:6px 0}
+.school-logo-heading p{margin:0;color:#426057;line-height:1.5}
+.school-logo-preview{width:92px;height:92px;object-fit:contain;border:1px solid #d2dcd2;background:#fff;padding:6px}
+.school-logo-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.school-logo-fields label{display:grid;gap:6px;font-size:13px;font-weight:650;color:#29463f}
+.school-logo-fields input{width:100%;border:1px solid #aab8ad;background:#fffdf8;padding:10px 11px;color:#18322d;font:inherit;font-weight:400;border-radius:0}
+.school-logo-fields small{font-size:11px;font-weight:400;color:#426057;letter-spacing:0;text-transform:none}
 .theme-preset-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 .theme-preset{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #d2dcd2;background:#fffdf8;text-align:left;color:#18322d}
 .theme-preset.active{border-color:#b25b42;background:#eef3ed}
@@ -64,4 +73,4 @@
 .managed-media-item small{font-size:11px;letter-spacing:0;color:#426057;text-transform:none}
 .content-manager .muted{color:#426057;line-height:1.5}
 @media(max-width:800px){.content-manager-layout,.media-layout{grid-template-columns:1fr}.managed-list{grid-template-columns:repeat(2,minmax(0,1fr))}.managed-list-title,.managed-list>.muted{grid-column:1/-1}}
-@media(max-width:520px){.content-manager-heading{align-items:start;flex-direction:column}.managed-list{grid-template-columns:1fr}.editor-fields{grid-template-columns:1fr}.wide-field{grid-column:auto}.editable-section{padding:16px 12px}.remove-section{right:8px}.media-editor{width:100%}}
+@media(max-width:520px){.content-manager-heading{align-items:start;flex-direction:column}.managed-list{grid-template-columns:1fr}.editor-fields,.school-logo-fields{grid-template-columns:1fr}.wide-field{grid-column:auto}.editable-section{padding:16px 12px}.remove-section{right:8px}.media-editor{width:100%}.school-logo-heading{align-items:flex-start}}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { currentSchoolSettings, managedMedia, managedNotices, managedPages, publicMedia, saveManagedMedia, saveManagedPage, saveNotice, saveSchoolSettings, themePresets, uploadImageToCloudinary, type ManagedMedia, type ManagedPage, type NoticeRecord, type SchoolSettings, type SessionUser } from './api';
+import { currentSchoolSettings, managedMedia, managedNotices, managedPages, publicMedia, saveManagedMedia, saveManagedPage, saveNotice, saveSchoolSettings, themePresets, uploadImageToCloudinary, type ManagedMedia, type ManagedPage, type NoticeRecord, type SchoolLogo, type SchoolSettings, type SessionUser } from './api';
 import './content-management.css';
 
 const anthemSections = [
@@ -38,7 +38,7 @@ function blankNotice(): NoticeDraft {
   };
 }
 
-export function ContentManagement({ user, settings, onSettingsChange }: { user: SessionUser; settings: SchoolSettings; onSettingsChange: (settings: SchoolSettings) => void }) {
+export function ContentManagement({ user, settings, onSettingsChange, schoolLogo, onLogoChange }: { user: SessionUser; settings: SchoolSettings; onSettingsChange: (settings: SchoolSettings) => void; schoolLogo: SchoolLogo | null; onLogoChange: (logo: SchoolLogo | null) => void }) {
   const permissions = new Set(user.roles?.flatMap((role) => role.permissions) ?? []);
   const canManageContent = permissions.has('content:manage');
   const canManageMedia = permissions.has('media:manage');
@@ -52,6 +52,8 @@ export function ContentManagement({ user, settings, onSettingsChange }: { user: 
   const [media, setMedia] = useState({ key: '', url: '', altText: '', section: '' });
   const [mediaSource, setMediaSource] = useState<'url' | 'upload'>('url');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoAltText, setLogoAltText] = useState(schoolLogo?.altText ?? `${settings.schoolName} logo`);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [brandingSaving, setBrandingSaving] = useState(false);
@@ -103,6 +105,10 @@ export function ContentManagement({ user, settings, onSettingsChange }: { user: 
       void publicMedia().then((result) => setSectionMedia(result.media)).catch(() => undefined);
     }
   }, [canManageContent]);
+
+  useEffect(() => {
+    setLogoAltText(schoolLogo?.altText ?? `${settings.schoolName} logo`);
+  }, [schoolLogo, settings.schoolName]);
 
   async function submitBranding(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -280,6 +286,39 @@ export function ContentManagement({ user, settings, onSettingsChange }: { user: 
     }
   }
 
+  async function submitLogo(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      if (!logoFile) throw new Error('Choose the school logo file first');
+      if (!logoFile.type.startsWith('image/')) throw new Error('Choose a valid image file');
+      if (logoFile.size > 10 * 1024 * 1024) throw new Error('Image must be 10 MB or smaller');
+      const uploaded = await uploadImageToCloudinary(logoFile);
+      const result = await saveManagedMedia({
+        key: 'school.logo',
+        url: uploaded.url,
+        publicId: uploaded.publicId,
+        storageProvider: 'cloudinary',
+        altText: logoAltText.trim() || `${settings.schoolName} logo`,
+        section: 'school branding'
+      });
+      const nextLogo = { url: result.media.url, altText: result.media.altText };
+      onLogoChange(nextLogo);
+      setLogoAltText(nextLogo.altText);
+      setLogoFile(null);
+      const [activeMedia, publicAssets] = await Promise.all([managedMedia(), publicMedia()]);
+      setMediaAssets(activeMedia.media.filter((asset) => asset.isActive));
+      setSectionMedia(publicAssets.media);
+      setMessage('School logo uploaded and published.');
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Unable to upload school logo');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return <section className="content-manager">
     <div className="content-manager-heading">
       <div><small>SCHOOL WEBSITE</small><h2>Content &amp; media</h2><p>Update public information and image references without changing application code.</p></div>
@@ -305,6 +344,14 @@ export function ContentManagement({ user, settings, onSettingsChange }: { user: 
         </button>)}
       </div>
       {brandingMessage && <p className="content-manager-message success" role="status">{brandingMessage}</p>}
+    </form>}
+    {canManageMedia && <form className="school-logo-editor" onSubmit={submitLogo}>
+      <div className="school-logo-heading"><div><small>SCHOOL IDENTITY</small><h3>School logo</h3><p>Upload once to update the public header and portal sidebars.</p></div>{schoolLogo && <img className="school-logo-preview" src={schoolLogo.url} alt={schoolLogo.altText} />}</div>
+      <div className="school-logo-fields">
+        <label>Choose logo<input type="file" accept="image/*" onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)} required /><small>PNG, JPEG, WebP, or SVG. Maximum 10 MB.</small></label>
+        <label>Alternative text<input value={logoAltText} onChange={(event) => setLogoAltText(event.target.value)} required /></label>
+      </div>
+      <button className="save-content" type="submit" disabled={saving || !logoFile}>{saving ? 'Uploading...' : schoolLogo ? 'Replace school logo' : 'Upload school logo'}</button>
     </form>}
     {loading ? <p className="muted">Loading editable content...</p> : tab === 'pages' && canManageContent ? <div className="content-manager-layout">
       <aside className="managed-list" aria-label="Saved pages">
